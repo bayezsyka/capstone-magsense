@@ -150,7 +150,7 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div className="bg-gradient-to-br from-emerald-50 to-green-50/50 border border-emerald-100/50 rounded-2xl p-6 text-center transition-all duration-300 hover:shadow-md">
               <p className="text-xs font-black text-mag-green uppercase tracking-wider mb-2">Suhu Udara</p>
               <p className="text-4xl font-bold text-slate-800">{sensorData.currentBox.airTemp}<span className="text-xl text-slate-400 font-medium">°C</span></p>
@@ -167,7 +167,7 @@ const Dashboard = () => {
 
           <div>
             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Status Aktuator</h4>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {Object.entries(sensorData.currentBox.actuators).map(([key, value]) => (
                 <div key={key} className={`border rounded-xl p-4 flex flex-col items-center justify-center transition-all duration-300 ${value === 'ON' ? 'bg-mag-green/10 border-mag-green/30' : 'bg-gray-50 border-gray-100'}`}>
                     {key === 'heater' && <Thermometer size={24} className={`mb-2 ${value === 'ON' ? 'text-mag-green' : 'text-gray-300'}`} />}
