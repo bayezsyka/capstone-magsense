@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import logging
 import time
@@ -37,8 +38,13 @@ def process_frame(frame, box_id=1):
         'PUPA': 0
     }
     
-    if model is not None:
+    is_mock = os.environ.get('MOCK_CV', 'False').lower() == 'true' or model is None or frame is None
+    
+    if not is_mock:
         try:
+            # Resize frame to 640x640 to save CPU/GPU overhead
+            frame = cv2.resize(frame, (640, 640))
+                
             # Predict using YOLOv8
             results = model.predict(source=frame, save=False, verbose=False)
             
@@ -122,8 +128,12 @@ def run_camera_loop():
             time.sleep(60)
     except KeyboardInterrupt:
         logging.info("CV Worker stopped by user.")
+    except Exception as e:
+        logging.error(f"CV Worker encountered a fatal error: {e}")
     finally:
-        cap.release()
+        if cap and cap.isOpened():
+            cap.release()
+            logging.info("Camera released cleanly.")
 
 if __name__ == "__main__":
     run_camera_loop()

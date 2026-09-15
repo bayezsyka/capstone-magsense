@@ -134,11 +134,11 @@ export default function Profile() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
         {/* KARTU FOTO PROFIL */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
-          <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-4">Foto Profil</p>
+        <div className="bg-white/90 backdrop-blur-sm p-8 rounded-3xl border border-white/50 shadow-soft flex flex-col items-center justify-center text-center transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
+          <p className="text-slate-400 font-black text-[10px] uppercase tracking-wider mb-6">Foto Profil</p>
 
           <div className="relative group cursor-pointer" onClick={triggerFileInput}>
-            <div className="w-28 h-28 rounded-full bg-slate-100 border-2 border-emerald-500 overflow-hidden flex items-center justify-center shadow-inner transition-transform group-hover:scale-105">
+            <div className="w-32 h-32 rounded-3xl bg-slate-50 border-4 border-white shadow-glow overflow-hidden flex items-center justify-center transition-transform group-hover:scale-105 group-hover:rotate-3">
               {profile.avatar ? (
                 <img src={profile.avatar} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
@@ -146,8 +146,8 @@ export default function Profile() {
               )}
             </div>
             {/* Overlay Hover Unggah */}
-            <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              <Camera size={24} className="text-white" />
+            <div className="absolute inset-0 bg-mag-green/20 backdrop-blur-sm rounded-3xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <Camera size={28} className="text-white drop-shadow-md" />
             </div>
           </div>
 
@@ -161,49 +161,49 @@ export default function Profile() {
 
           <button
             onClick={triggerFileInput}
-            className="mt-4 text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 py-1.5 px-4 rounded-xl transition-colors"
+            className="mt-6 text-xs font-black text-mag-green hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 py-2.5 px-5 rounded-xl transition-all hover:shadow-sm"
           >
             Pilih Foto Baru
           </button>
-          <p className="text-[10px] text-slate-400 mt-2">Mendukung format JPG, PNG. Maks 10MB.</p>
+          <p className="text-[10px] font-bold text-slate-400 mt-3 uppercase tracking-wider">Mendukung format JPG, PNG. Maks 10MB.</p>
         </div>
 
         {/* FORM DATA PENGGUNA */}
-        <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <h3 className="text-base font-bold text-slate-800 border-b pb-3 mb-4">Informasi Akun</h3>
+        <div className="md:col-span-2 bg-white/90 backdrop-blur-sm p-8 rounded-3xl border border-white/50 shadow-soft transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
+          <h3 className="text-lg font-black text-slate-800 border-b border-slate-100 pb-4 mb-6">Informasi Akun</h3>
 
           <form onSubmit={handleSaveProfile} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nama Lengkap</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Nama Lengkap</label>
               <input
                 type="text"
                 name="name"
                 value={profile.name}
                 onChange={handleProfileChange}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-sm font-bold focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-mag-green transition-all"
                 placeholder="Masukkan nama lengkap"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Alamat Email</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Alamat Email</label>
               <input
                 type="email"
                 name="email"
                 value={profile.email}
                 onChange={handleProfileChange}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-slate-50 text-slate-400 cursor-not-allowed"
+                className="w-full px-5 py-3.5 rounded-2xl border border-slate-100 text-sm font-bold bg-slate-100/50 text-slate-400 cursor-not-allowed"
                 disabled
               />
-              <p className="text-[10px] text-slate-400 mt-1">Email utama tidak dapat diubah demi keamanan akun.</p>
+              <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-wider">Email utama tidak dapat diubah demi keamanan akun.</p>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-4">
               <button
                 type="submit"
-                className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-100 transition-all"
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-mag-green to-emerald-400 hover:from-emerald-500 hover:to-emerald-600 text-white rounded-xl text-xs font-black shadow-glow hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
               >
-                <Save size={14} /> Simpan Perubahan
+                <Save size={16} /> Simpan Perubahan
               </button>
             </div>
           </form>
@@ -211,55 +211,55 @@ export default function Profile() {
       </div>
 
       {/* FORM PENGATURAN KATA SANDI */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <h3 className="text-base font-bold text-slate-800 border-b pb-3 mb-4 flex items-center gap-2">
-          <Lock size={18} className="text-slate-400" /> Keamanan & Kata Sandi
+      <div className="bg-white/90 backdrop-blur-sm p-8 rounded-3xl border border-white/50 shadow-soft transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
+        <h3 className="text-lg font-black text-slate-800 border-b border-slate-100 pb-4 mb-6 flex items-center gap-3">
+          <Lock size={20} className="text-mag-green" /> Keamanan & Kata Sandi
         </h3>
 
-        <form onSubmit={handleUpdatePassword} className="space-y-4 max-w-2xl">
+        <form onSubmit={handleUpdatePassword} className="space-y-6 max-w-2xl">
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Kata Sandi Saat Ini</label>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Kata Sandi Saat Ini</label>
             <input
               type="password"
               name="currentPassword"
               value={passwordData.currentPassword}
               onChange={handlePasswordChange}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+              className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-sm font-bold focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-mag-green transition-all"
               placeholder="••••••••"
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Kata Sandi Baru</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Kata Sandi Baru</label>
               <input
                 type="password"
                 name="newPassword"
                 value={passwordData.newPassword}
                 onChange={handlePasswordChange}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-sm font-bold focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-mag-green transition-all"
                 placeholder="Minimal 6 karakter"
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Konfirmasi Kata Sandi Baru</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Konfirmasi Kata Sandi Baru</label>
               <input
                 type="password"
                 name="confirmPassword"
                 value={passwordData.confirmPassword}
                 onChange={handlePasswordChange}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-sm font-bold focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-mag-green transition-all"
                 placeholder="Ulangi kata sandi baru"
               />
             </div>
           </div>
 
-          <div className="pt-2">
+          <div className="pt-4">
             <button
               type="submit"
-              className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold shadow-md shadow-slate-100 transition-all"
+              className="flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-black shadow-soft hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
             >
-              <KeyRound size={14} /> Perbarui Kata Sandi
+              <KeyRound size={16} /> Perbarui Kata Sandi
             </button>
           </div>
         </form>

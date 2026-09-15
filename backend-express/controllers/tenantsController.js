@@ -24,10 +24,10 @@ exports.getTenantById = async (req, res) => {
 
 exports.createTenant = async (req, res) => {
     try {
-        const { id, name, tenant_code, contact_person, phone, address, is_active } = req.body;
+        const { name, tenant_code, contact_person, phone, address, is_active } = req.body;
         const { rows } = await pool.query(
-            'INSERT INTO tenants (id, name, tenant_code, contact_person, phone, address, is_active) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-            [id, name, tenant_code, contact_person, phone, address, is_active]
+            'INSERT INTO tenants (id, name, tenant_code, contact_person, phone, address, is_active) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6) RETURNING *',
+            [name, tenant_code, contact_person, phone, address, is_active ?? true]
         );
         res.status(201).json(rows[0]);
     } catch (err) {

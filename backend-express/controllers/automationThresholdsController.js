@@ -24,10 +24,10 @@ exports.getThresholdById = async (req, res) => {
 
 exports.createThreshold = async (req, res) => {
     try {
-        const { id, tenant_id, floor_level, temp_min, temp_max, air_hum_min, air_hum_max, media_hum_min, media_hum_max } = req.body;
+        const { tenant_id, floor_level, temp_min, temp_max, air_hum_min, air_hum_max, media_hum_min, media_hum_max } = req.body;
         const { rows } = await pool.query(
-            'INSERT INTO automation_thresholds (id, tenant_id, floor_level, temp_min, temp_max, air_hum_min, air_hum_max, media_hum_min, media_hum_max) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
-            [id, tenant_id, floor_level, temp_min, temp_max, air_hum_min, air_hum_max, media_hum_min, media_hum_max]
+            'INSERT INTO automation_thresholds (id, tenant_id, floor_level, temp_min, temp_max, air_hum_min, air_hum_max, media_hum_min, media_hum_max) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+            [tenant_id, floor_level, temp_min, temp_max, air_hum_min, air_hum_max, media_hum_min, media_hum_max]
         );
         res.status(201).json(rows[0]);
     } catch (err) {

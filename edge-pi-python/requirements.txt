@@ -2,3 +2,6 @@ paho-mqtt
 ultralytics
 xgboost
 requests
+aiortc
+aiohttp
+opencv-python

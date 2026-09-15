@@ -24,10 +24,10 @@ exports.getBoxById = async (req, res) => {
 
 exports.createBox = async (req, res) => {
     try {
-        const { id, tenant_id, name, is_active } = req.body;
+        const { tenant_id, name, is_active } = req.body;
         const { rows } = await pool.query(
-            'INSERT INTO boxes (id, tenant_id, name, is_active) VALUES ($1, $2, $3, $4) RETURNING *',
-            [id, tenant_id, name, is_active]
+            'INSERT INTO boxes (id, tenant_id, name, is_active) VALUES (gen_random_uuid(), $1, $2, $3) RETURNING *',
+            [tenant_id, name, is_active ?? true]
         );
         res.status(201).json(rows[0]);
     } catch (err) {

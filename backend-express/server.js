@@ -13,10 +13,15 @@ const io = new Server(server, {
     }
 });
 
+// Expose Socket.io to routes
+app.set('io', io);
+
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+
+const { verifyToken } = require('./middlewares/auth');
 
 // Routes
 const tenantsRoutes = require('./routes/tenants');
@@ -24,12 +29,24 @@ const usersRoutes = require('./routes/users');
 const boxesRoutes = require('./routes/boxes');
 const automationThresholdsRoutes = require('./routes/automation_thresholds');
 const edgeSyncRoutes = require('./routes/edge_sync');
+const sensorDataRoutes = require('./routes/sensor_data');
+const actuatorLogsRoutes = require('./routes/actuator_logs');
+const cvResultsRoutes = require('./routes/cv_results');
+const harvestPredictionsRoutes = require('./routes/harvest_predictions');
+const boxLocationsRoutes = require('./routes/box_locations');
+const notificationsRoutes = require('./routes/notifications');
 
-app.use('/api/tenants', tenantsRoutes);
-app.use('/api/users', usersRoutes);
-app.use('/api/boxes', boxesRoutes);
-app.use('/api/automation-thresholds', automationThresholdsRoutes);
+app.use('/api/tenants', verifyToken, tenantsRoutes);
+app.use('/api/users', usersRoutes); // verifyToken applied inside routes/users.js to allow /login
+app.use('/api/boxes', verifyToken, boxesRoutes);
+app.use('/api/automation-thresholds', verifyToken, automationThresholdsRoutes);
 app.use('/api/edge-sync', edgeSyncRoutes);
+app.use('/api/sensor-data', verifyToken, sensorDataRoutes);
+app.use('/api/actuator-logs', verifyToken, actuatorLogsRoutes);
+app.use('/api/cv-results', verifyToken, cvResultsRoutes);
+app.use('/api/harvest-predictions', verifyToken, harvestPredictionsRoutes);
+app.use('/api/box-locations', verifyToken, boxLocationsRoutes);
+app.use('/api/notifications', verifyToken, notificationsRoutes);
 
 app.get('/', (req, res) => {
     res.json({ message: 'Smart Farming API Cloud is running' });

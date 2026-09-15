@@ -52,10 +52,19 @@ def on_message(client, userdata, msg):
     except Exception as e:
         logging.error(f"Error processing message: {e}")
 
+def on_disconnect(client, userdata, rc):
+    logging.warning(f"Disconnected from MQTT Broker with return code {rc}")
+    if rc != 0:
+        logging.info("Unexpected disconnection. Auto-reconnecting...")
+
 def start_mqtt_worker():
     client = mqtt.Client(client_id="Pi_Edge_MQTT_Worker")
     client.on_connect = on_connect
     client.on_message = on_message
+    client.on_disconnect = on_disconnect
+    
+    # Configure auto-reconnect delays (min 1s, max 60s)
+    client.reconnect_delay_set(min_delay=1, max_delay=60)
 
     connected = False
     while not connected:
