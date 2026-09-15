@@ -1,66 +1,86 @@
 import sqlite3
+import logging
 import time
 import requests
-import os
 
-DB_FILE = "local_edge.db"
-# Target local backend API for syncing edge data
-CLOUD_API_URL = os.getenv("CLOUD_API_URL", "http://localhost:5000/api/edge-sync")
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def sync_table(cursor, table_name, endpoint):
-    cursor.execute(f"SELECT * FROM {table_name} WHERE synced = 0")
+DB_FILE = "edge_local.db"
+CLOUD_API_URL = "http://localhost:5000/api/sync" # Update with actual backend URL in production
+
+def get_unsynced_data(table, columns):
+    """
+    Fetch unsynced rows from a given table.
+    """
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT id, {','.join(columns)} FROM {table} WHERE synced = 0")
     rows = cursor.fetchall()
+    conn.close()
     
-    if not rows:
-        return
-        
-    print(f"Found {len(rows)} unsynced records in {table_name}.")
-    
-    # Get column names
-    column_names = [description[0] for description in cursor.description]
-    
-    synced_ids = []
-    
+    # Format to list of dictionaries
+    result = []
     for row in rows:
-        payload = dict(zip(column_names, row))
-        try:
-            # Assuming endpoint handles individual or bulk uploads. We do individual for simplicity.
-            response = requests.post(f"{CLOUD_API_URL}/{endpoint}", json=payload, timeout=5)
-            if response.status_code in [200, 201]:
-                synced_ids.append(row[0]) # id is usually the first column
-            else:
-                print(f"Failed to sync record {row[0]}: HTTP {response.status_code}")
-        except requests.exceptions.RequestException as e:
-            print(f"Network error syncing {table_name}: {e}")
-            break # Stop trying if network is down
-            
-    # Update synced status locally
-    if synced_ids:
-        cursor.execute(
-            f"UPDATE {table_name} SET synced = 1 WHERE id IN ({','.join(['?']*len(synced_ids))})",
-            synced_ids
-        )
-        print(f"Successfully synced and marked {len(synced_ids)} records in {table_name}.")
+        record = {'id': row[0]}
+        for idx, col in enumerate(columns):
+            record[col] = row[idx+1]
+        result.append(record)
+    return result
+
+def mark_as_synced(table, ids):
+    """
+    Mark rows as synced in the database.
+    """
+    if not ids: return
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    placeholders = ','.join('?' * len(ids))
+    cursor.execute(f"UPDATE {table} SET synced = 1 WHERE id IN ({placeholders})", ids)
+    conn.commit()
+    conn.close()
+
+def sync_table(table, columns, endpoint_suffix):
+    """
+    Generic function to sync a specific table.
+    """
+    data = get_unsynced_data(table, columns)
+    if not data:
+        return
+
+    logging.info(f"Syncing {len(data)} records from {table} to cloud...")
+    
+    try:
+        # Assuming batch POST endpoint
+        response = requests.post(f"{CLOUD_API_URL}/{endpoint_suffix}", json={table: data}, timeout=10)
+        
+        if response.status_code == 200 or response.status_code == 201:
+            ids_to_mark = [record['id'] for record in data]
+            mark_as_synced(table, ids_to_mark)
+            logging.info(f"Successfully synced and marked {len(ids_to_mark)} records for {table}.")
+        else:
+            logging.error(f"Failed to sync {table}. Status Code: {response.status_code}, Response: {response.text}")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Network error syncing {table}: {e}")
 
 def run_cloud_sync():
-    print(f"Starting cloud sync worker. Targeting {CLOUD_API_URL}...")
+    logging.info("Starting Cloud Sync Worker...")
+    
+    # Define tables and their columns to sync (excluding id and synced flag)
+    tables_to_sync = [
+        ('sensor_data', ['box_id', 'temperature', 'humidity', 'media_humidity', 'timestamp'], 'sensors'),
+        ('actuator_logs', ['box_id', 'actuator_type', 'status', 'timestamp'], 'actuators'),
+        ('cv_results', ['box_id', 'baby_larva', 'adult_larva', 'prepupa', 'pupa', 'dominant_phase', 'timestamp'], 'cv'),
+        ('harvest_predictions', ['box_id', 'predicted_days', 'confidence', 'timestamp'], 'predictions')
+    ]
     
     while True:
-        try:
-            conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
-            
-            # endpoints need to be implemented on the backend-express if they aren't already.
-            sync_table(cursor, "sensor_data", "sensor")
-            sync_table(cursor, "cv_data", "cv")
-            sync_table(cursor, "ml_predictions", "ml")
-            
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            print(f"Error during cloud sync: {e}")
-            
-        # Check every 30 seconds
+        for table, columns, endpoint in tables_to_sync:
+            try:
+                sync_table(table, columns, endpoint)
+            except Exception as e:
+                logging.error(f"Unexpected error while syncing {table}: {e}")
+        
+        # Wait before next sync cycle (e.g., every 30 seconds)
         time.sleep(30)
 
 if __name__ == "__main__":

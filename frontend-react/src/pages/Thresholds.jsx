@@ -1,425 +1,162 @@
-import { useState, useEffect } from 'react';
-import axios from 'axios';
-import config from '../config';
-import {
-  Save,
-  Thermometer,
-  Droplets,
-  Wind,
-  AlertCircle,
-  RotateCcw,
-  Layers
-} from 'lucide-react';
-
-const API_BASE = config.API_URL;
+import { useState } from 'react';
+import { Save, AlertCircle, RotateCcw } from 'lucide-react';
 
 export default function Thresholds() {
-
-  // State ruang aktif
-  const [selectedFloor, setSelectedFloor] = useState(1);
-
-  // Form state
   const [form, setForm] = useState({
-    floorLevel: 1,
-    tempMin: 25.0,
-    tempMax: 35.0,
-    mediaMin: 40.0,
-    mediaMax: 65.0,
-    humAirMin: 60.0,
-    humAirMax: 85.0
+    tempMin: 25,
+    tempMax: 32,
+    mediaMin: 40,
+    mediaMax: 65,
+    humAirMin: 60,
+    humAirMax: 85
   });
 
-  // Fetch data berdasarkan ruang
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-
-    axios
-      .get(
-        `${API_BASE}/api/thresholds/${selectedFloor}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      )
-      .then((res) => setForm(res.data))
-      .catch((err) =>
-        console.error('Thresholds Fetch Error:', err)
-      );
-
-  }, [selectedFloor]);
-
-  // Save
-  const handleSave = async (e) => {
-    e.preventDefault();
-
-    const token = localStorage.getItem('token');
-
-    try {
-
-      await axios.post(
-        `${API_BASE}/api/thresholds`,
-        {
-          ...form,
-          floorLevel: selectedFloor
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-
-      alert(
-        `Konfigurasi ambang batas Ruang ${selectedFloor} berhasil diperbarui dan disinkronkan ke DB & Broker MQTT!`
-      );
-
-    } catch (err) {
-
-      console.error('Save Thresholds Error:', err);
-
-      alert(
-        `Gagal menyimpan ambang batas Ruang ${selectedFloor}`
-      );
-    }
-  };
-
-  // Reset default
   const handleReset = () => {
-
-    if (
-      window.confirm(
-        `Kembalikan pengaturan Ruang ${selectedFloor} ke default pabrik?`
-      )
-    ) {
-
+    if (window.confirm("Kembalikan pengaturan ke default pabrik?")) {
       setForm({
-        floorLevel: selectedFloor,
-        tempMin: 25.0,
-        tempMax: 32.0,
-        mediaMin: 40.0,
-        mediaMax: 65.0,
-        humAirMin: 60.0,
-        humAirMax: 85.0
+        tempMin: 25,
+        tempMax: 32,
+        mediaMin: 40,
+        mediaMax: 65,
+        humAirMin: 60,
+        humAirMax: 85
       });
-
     }
   };
 
   return (
     <div className="space-y-6 pb-10">
-
+      
       {/* HEADER INFO */}
-      <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl flex items-start gap-4">
-
-        <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg">
+      <div className="bg-green-50/50 border border-green-100 p-4 rounded-xl flex items-start gap-4 mb-8">
+        <div className="p-1.5 text-mag-green rounded-lg">
           <AlertCircle size={20} />
         </div>
-
         <div>
-          <h4 className="text-sm font-bold text-emerald-900">
-            Panduan Konfigurasi Multi-Ruang
+          <h4 className="text-sm font-bold text-gray-800">
+            Panduan Konfigurasi
           </h4>
-
-          <p className="text-xs text-emerald-700 leading-relaxed">
-            Pilih nomor Ruang terlebih dahulu sebelum mengubah parameter.
-            Parameter di bawah ini akan menentukan kapan aktuator pada
-            Ruang tersebut menyala secara otomatis.
+          <p className="text-xs text-gray-500 mt-1">
+            Parameter di bawah ini akan menentukan kapan aktuator menyala otomatis. Pastikan nilai minimum tidak lebih besar dari maksimum.
           </p>
         </div>
-
-      </div>
-
-      {/* SELECTOR RUANG */}
-      <div className="bg-slate-100 p-1.5 rounded-2xl inline-flex w-full md:w-auto gap-1 border border-slate-200">
-
-        {[1, 2, 3, 4].map((floor) => (
-
-          <button
-            key={floor}
-            type="button"
-            onClick={() => setSelectedFloor(floor)}
-            className={`
-              flex-1 md:flex-initial
-              px-6 py-2.5
-              rounded-xl
-              font-bold
-              text-xs
-              uppercase
-              tracking-wider
-              transition
-              flex items-center justify-center gap-2
-
-              ${selectedFloor === floor
-                ? 'bg-white text-emerald-700 shadow-sm border border-slate-200/60'
-                : 'text-slate-600 hover:bg-slate-200/70'
-              }
-            `}
-          >
-
-            <Layers size={14} />
-            Ruang {floor}
-
-          </button>
-
-        ))}
-
       </div>
 
       {/* CARD */}
-      <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
-
-        <div className="mb-6 flex items-center gap-2">
-
-          <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full font-black text-xs">
-            RUANG KANDANG {selectedFloor}
-          </span>
-
-        </div>
-
-        <form onSubmit={handleSave} className="space-y-8">
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+        <form className="space-y-10">
 
           {/* SUHU UDARA */}
-          <div className="space-y-3">
-
-            <div className="flex items-center gap-2 text-emerald-700 border-b border-slate-100 pb-2">
-
-              <Thermometer size={18} />
-
-              <h3 className="text-base font-black uppercase tracking-tight">
-                Ambang Suhu Udara
-              </h3>
-
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-              <div className="space-y-1">
-
-                <label className="text-[11px] font-bold text-slate-500 uppercase">
-                  Suhu Minimum (°C)
-                </label>
-
+          <div className="space-y-4">
+            <h3 className="text-sm font-black text-mag-green uppercase tracking-wider flex items-center gap-2">
+              <span className="w-1.5 h-4 bg-mag-green rounded-full inline-block"></span>
+              Ambang Suhu Udara
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-600 uppercase">Suhu Minimum (°C)</label>
                 <input
                   type="number"
-                  step="0.1"
-                  value={form.tempMin || ''}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      tempMin: parseFloat(e.target.value) || 0
-                    })
-                  }
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-semibold text-sm"
+                  value={form.tempMin}
+                  onChange={(e) => setForm({...form, tempMin: e.target.value})}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none font-semibold text-sm"
                 />
-
-                <p className="text-[10px] text-slate-400 italic">
-                  Heater aktif jika suhu turun di bawah batas ini.
-                </p>
-
+                <p className="text-[10px] text-gray-400 italic">Heater aktif jika suhu turun di bawah batas ini.</p>
               </div>
-
-              <div className="space-y-1">
-
-                <label className="text-[11px] font-bold text-slate-500 uppercase">
-                  Suhu Maksimum (°C)
-                </label>
-
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-600 uppercase">Suhu Maksimum (°C)</label>
                 <input
                   type="number"
-                  step="0.1"
-                  value={form.tempMax || ''}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      tempMax: parseFloat(e.target.value) || 0
-                    })
-                  }
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-semibold text-sm"
+                  value={form.tempMax}
+                  onChange={(e) => setForm({...form, tempMax: e.target.value})}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none font-semibold text-sm"
                 />
-
-                <p className="text-[10px] text-slate-400 italic">
-                  Kipas aktif jika suhu melebihi batas ini.
-                </p>
-
+                <p className="text-[10px] text-gray-400 italic">Kipas aktif jika suhu melebihi batas ini.</p>
               </div>
-
             </div>
-
           </div>
 
           {/* KELEMBAPAN MEDIA */}
-          {selectedFloor !== 4 && (
-
-            <div className="space-y-3">
-
-              <div className="flex items-center gap-2 text-blue-600 border-b border-slate-100 pb-2">
-
-                <Droplets size={18} />
-
-                <h3 className="text-base font-black uppercase tracking-tight">
-                  Ambang Kelembapan Media
-                </h3>
-
+          <div className="space-y-4">
+            <h3 className="text-sm font-black text-blue-500 uppercase tracking-wider flex items-center gap-2">
+              <span className="w-1.5 h-4 bg-blue-500 rounded-full inline-block"></span>
+              Ambang Kelembapan Media
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-600 uppercase">Kelembapan Min (%)</label>
+                <input
+                  type="number"
+                  value={form.mediaMin}
+                  onChange={(e) => setForm({...form, mediaMin: e.target.value})}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-sm"
+                />
+                <p className="text-[10px] text-gray-400 italic">Memulai penyiraman otomatis.</p>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-                <div className="space-y-1">
-
-                  <label className="text-[11px] font-bold text-slate-500 uppercase">
-                    Kelembapan Min (%)
-                  </label>
-
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={form.mediaMin || ''}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        mediaMin: parseFloat(e.target.value) || 0
-                      })
-                    }
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-sm"
-                  />
-
-                  <p className="text-[10px] text-slate-400 italic">
-                    Memulai penyiraman otomatis.
-                  </p>
-
-                </div>
-
-                <div className="space-y-1">
-
-                  <label className="text-[11px] font-bold text-slate-500 uppercase">
-                    Kelembapan Maks (%)
-                  </label>
-
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={form.mediaMax || ''}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        mediaMax: parseFloat(e.target.value) || 0
-                      })
-                    }
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-sm"
-                  />
-
-                  <p className="text-[10px] text-slate-400 italic">
-                    Menghentikan penyiraman otomatis.
-                  </p>
-
-                </div>
-
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-600 uppercase">Kelembapan Maks (%)</label>
+                <input
+                  type="number"
+                  value={form.mediaMax}
+                  onChange={(e) => setForm({...form, mediaMax: e.target.value})}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-sm"
+                />
+                <p className="text-[10px] text-gray-400 italic">Menghentikan penyiraman otomatis.</p>
               </div>
-
             </div>
-
-          )}
+          </div>
 
           {/* KELEMBAPAN UDARA */}
-          <div className="space-y-3">
-
-            <div className="flex items-center gap-2 text-indigo-600 border-b border-slate-100 pb-2">
-
-              <Wind size={18} />
-
-              <h3 className="text-base font-black uppercase tracking-tight">
-                Ambang Kelembapan Udara
-              </h3>
-
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-              <div className="space-y-1">
-
-                <label className="text-[11px] font-bold text-slate-500 uppercase">
-                  RH Min (%)
-                </label>
-
+          <div className="space-y-4">
+            <h3 className="text-sm font-black text-indigo-500 uppercase tracking-wider flex items-center gap-2">
+              <span className="w-1.5 h-4 bg-indigo-500 rounded-full inline-block"></span>
+              Ambang Kelembapan Udara
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-600 uppercase">RH Min (%)</label>
                 <input
                   type="number"
-                  step="0.1"
-                  value={form.humAirMin || ''}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      humAirMin: parseFloat(e.target.value) || 0
-                    })
-                  }
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-semibold text-sm"
+                  value={form.humAirMin}
+                  onChange={(e) => setForm({...form, humAirMin: e.target.value})}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-semibold text-sm"
                 />
-
-                <p className="text-[10px] text-slate-400 italic">
-                  Mengaktifkan humidifier.
-                </p>
-
+                <p className="text-[10px] text-gray-400 italic">Mengaktifkan humidifier.</p>
               </div>
-
-              <div className="space-y-1">
-
-                <label className="text-[11px] font-bold text-slate-500 uppercase">
-                  RH Maks (%)
-                </label>
-
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-600 uppercase">RH Maks (%)</label>
                 <input
                   type="number"
-                  step="0.1"
-                  value={form.humAirMax || ''}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      humAirMax: parseFloat(e.target.value) || 0
-                    })
-                  }
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-semibold text-sm"
+                  value={form.humAirMax}
+                  onChange={(e) => setForm({...form, humAirMax: e.target.value})}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-semibold text-sm"
                 />
-
-                <p className="text-[10px] text-slate-400 italic">
-                  Mengaktifkan kipas exhaust.
-                </p>
-
+                <p className="text-[10px] text-gray-400 italic">Mengaktifkan kipas exhaust.</p>
               </div>
-
             </div>
-
           </div>
 
           {/* BUTTON */}
-          <div className="flex flex-col md:flex-row items-center justify-end gap-3 pt-6 border-t border-slate-100">
-
+          <div className="flex flex-col md:flex-row items-center justify-end gap-4 pt-8 border-t border-gray-100 mt-10">
             <button
               type="button"
               onClick={handleReset}
-              className="w-full md:w-auto px-6 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-xl transition flex items-center justify-center gap-2"
+              className="w-full md:w-auto px-6 py-3 text-gray-500 font-bold hover:bg-gray-50 rounded-xl transition flex items-center justify-center gap-2 text-sm"
             >
-
               <RotateCcw size={16} />
               Reset Default
-
             </button>
-
             <button
-              type="submit"
-              className="w-full md:w-auto px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl flex items-center justify-center gap-2 transition shadow-lg shadow-emerald-200 active:scale-95"
+              type="button"
+              className="w-full md:w-auto px-8 py-3 bg-mag-green hover:bg-green-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition text-sm"
             >
-
-              <Save size={18} />
-              SIMPAN Ruang {selectedFloor}
-
+              <Save size={16} />
+              TERAPKAN PERUBAHAN
             </button>
-
           </div>
 
         </form>
-
       </div>
-
     </div>
   );
 }

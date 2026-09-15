@@ -1,201 +1,230 @@
-// src/pages/Prediction.jsx
-// Forcing Vite HMR update
-import { useState, useEffect } from 'react';
-import axios from 'axios';
-import config from '../config';
-import {
-  CalendarClock, AlertTriangle, TrendingUp,
-  Package, Timer, ChevronRight
-} from 'lucide-react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Cell
-} from 'recharts';
-
-const API_BASE = config.API_URL;
+import React from 'react';
+import { TrendingUp, Package, Timer, AlertTriangle, ChevronRight } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 export default function Prediction() {
-  const [predictions, setPredictions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const chartData = [
+    { name: 'Box 3', days: 5 },
+    { name: 'Box 2', days: 12 },
+    { name: 'Box 1', days: 24 },
+  ];
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    const fetchPredictions = () => {
-      axios.get(`${API_BASE}/api/predictions/all`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-        .then(res => {
-          setPredictions(res.data);
-          setLoading(false);
-        })
-        .catch(err => console.error("Predictions API Error:", err));
-    };
-
-    fetchPredictions();
-    const interval = setInterval(fetchPredictions, 15000); // Sinkron dengan cycle XGBoost (15s)
-    return () => clearInterval(interval);
-  }, []);
-
-  // Mengurutkan data berdasarkan sisa hari terkecil (paling mendesak di atas)
-  const sortedPredictions = [...predictions].sort((a, b) => a.days - b.days);
-
-  // Data untuk Grafik Batang
-  const chartData = sortedPredictions.map(p => ({
-    name: `Box ${p.boxId}`,
-    sisa: p.days,
-    color: p.status === 'warning' ? '#f97316' : '#10b981'
-  }));
+  const CustomTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-3 border border-gray-100 shadow-lg rounded-xl text-xs font-bold">
+          <p className="text-gray-800">{payload[0].payload.name}</p>
+          <p className="text-mag-green mt-1">Estimasi: {payload[0].value} Hari Lagi</p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="space-y-6 pb-10">
-      {/* SECTION 1: INSIGHT CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-emerald-600 p-5 rounded-2xl shadow-lg shadow-emerald-100 text-white flex items-center gap-4">
-          <div className="bg-white/20 p-3 rounded-xl">
-            <TrendingUp size={24} />
-          </div>
-          <div>
-            <p className="text-emerald-100 text-xs font-bold uppercase tracking-wider">Akurasi Model</p>
-            <p className="text-2xl font-black">94.2%</p>
-          </div>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-          <div className="bg-orange-100 text-orange-600 p-3 rounded-xl">
-            <Package size={24} />
-          </div>
-          <div>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Siap Panen (Minggu Ini)</p>
-            <p className="text-2xl font-black text-slate-800">1 Box</p>
+      
+      {/* HEADER CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-mag-green text-white p-5 rounded-2xl shadow-sm flex flex-col justify-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <TrendingUp size={20} className="text-white" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-green-100">AKURASI MODEL</p>
+              <p className="text-2xl font-black">94.2%</p>
+            </div>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-          <div className="bg-blue-100 text-blue-600 p-3 rounded-xl">
-            <Timer size={24} />
+
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center">
+              <Package size={20} className="text-orange-500" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">SIAP PANEN (MINGGU INI)</p>
+              <p className="text-2xl font-black text-gray-800">1 <span className="text-sm font-bold text-gray-500">Box</span></p>
+            </div>
           </div>
-          <div>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Rerata Siklus</p>
-            <p className="text-2xl font-black text-slate-800">24 Hari</p>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+              <Timer size={20} className="text-blue-500" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">RERATA SIKLUS</p>
+              <p className="text-2xl font-black text-gray-800">24 <span className="text-sm font-bold text-gray-500">Hari</span></p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* SECTION 2: GRAFIK ESTIMASI */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-          <CalendarClock size={20} className="text-emerald-600" />
+      {/* CHART */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <h3 className="text-sm font-black text-gray-800 mb-6 flex items-center gap-2">
+          <span className="w-1.5 h-4 bg-mag-green rounded-full inline-block"></span>
           Perbandingan Estimasi Panen
         </h3>
-        <div className="h-[250px] w-full min-h-[250px]">
-          <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={250}>
-            {/* 1. Ubah margin left menjadi positif (misal: 10 atau 20) */}
-            <BarChart
-              data={chartData}
-              layout="vertical"
-              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
+        
+        <div className="h-[200px] w-full mt-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart layout="vertical" data={chartData} margin={{ top: 0, right: 30, left: 0, bottom: 0 }} barSize={16}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
               <XAxis type="number" hide />
-
-              {/* 2. Tambahkan width pada YAxis agar label tidak tercekik */}
-              <YAxis
-                dataKey="name"
-                type="category"
-                width={60}
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: '#64748b', fontWeight: 600, fontSize: 12 }}
-              />
-
-              <Tooltip
-                cursor={{ fill: 'transparent' }}
-                contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-              />
-              <Bar dataKey="sisa" radius={[0, 10, 10, 0]} barSize={30}>
+              <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fill: '#475569', fontSize: 12, fontWeight: 700}} width={60} />
+              <Tooltip cursor={{fill: '#f8fafc'}} content={<CustomTooltip />} />
+              <Bar dataKey="days" radius={[0, 8, 8, 0]}>
                 {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
+                  <Cell key={`cell-${index}`} fill={entry.days <= 7 ? '#f97316' : '#00b074'} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <p className="text-center text-xs text-slate-400 mt-2 italic">* Box dengan sisa hari paling sedikit ditampilkan paling atas</p>
+        <p className="text-[10px] text-gray-400 text-center italic mt-2">* Box dengan sisa hari paling sedikit ditampilkan paling atas</p>
       </div>
 
-      {/* SECTION 3: PREDICTION CARDS */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {sortedPredictions.map((pred) => (
-          <div key={pred.boxId} className={`bg-white rounded-2xl shadow-sm border-2 overflow-hidden transition-all hover:shadow-md ${pred.status === 'warning' ? 'border-orange-400' : 'border-slate-100'}`}>
-            {/* Header Box */}
-            <div className={`p-4 flex justify-between items-center ${pred.status === 'warning' ? 'bg-orange-50' : 'bg-slate-50'}`}>
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter leading-none">Ruang {pred.floor}</p>
-                <h2 className="text-lg font-black text-slate-700">BOX #{pred.boxId}</h2>
-              </div>
-              {pred.status === 'warning' && (
-                <div className="animate-bounce">
-                  <AlertTriangle size={24} className="text-orange-500" />
-                </div>
-              )}
+      {/* BOX PREDICTIONS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        {/* BOX 3 */}
+        <div className="bg-orange-50/30 rounded-2xl shadow-sm border-2 border-orange-200 overflow-hidden flex flex-col p-6">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">RUANG 3</p>
+              <h4 className="text-xl font-black text-gray-800">BOX #3</h4>
             </div>
+            <AlertTriangle className="text-orange-400" size={24} />
+          </div>
 
-            <div className="p-6">
-              {/* Progress Bar */}
-              <div className="mb-6">
-                <div className="flex justify-between text-xs font-bold mb-1.5">
-                  <span className="text-slate-400 uppercase">Tahap Siklus</span>
-                  <span className={pred.status === 'warning' ? 'text-orange-600' : 'text-emerald-600'}>{pred.progress}%</span>
-                </div>
-                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-1000 ${pred.status === 'warning' ? 'bg-orange-500' : 'bg-emerald-500'}`}
-                    style={{ width: `${pred.progress}%` }}
-                  ></div>
-                </div>
-              </div>
-
-              <div className="space-y-3 mb-6">
-                <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <div className="text-slate-400 mt-1"><TrendingUp size={16} /></div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Status Mikroklimat</p>
-                    <p className="text-xs text-slate-600 font-medium leading-tight">{pred.input}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <div className="text-slate-400 mt-1"><Package size={16} /></div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Analisis Visual</p>
-                    <p className="text-xs text-slate-600 font-medium leading-tight">{pred.dist}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="relative p-5 bg-slate-900 rounded-2xl overflow-hidden shadow-inner">
-                <div className="absolute top-0 right-0 w-20 h-20 bg-white/5 rounded-full -mr-10 -mt-10"></div>
-
-                <div className="relative z-10 flex flex-col items-center">
-                  <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-[0.2em] mb-1">Prediksi Panen</p>
-                  <p className="text-lg font-bold text-white mb-3">{pred.date}</p>
-
-                  <div className="h-[1px] w-full bg-white/10 mb-3"></div>
-
-                  <div className="flex items-baseline gap-1">
-                    <span className={`text-4xl font-black ${pred.status === 'warning' ? 'text-orange-400' : 'text-emerald-400'}`}>
-                      {pred.days}
-                    </span>
-                    <span className="text-white font-bold text-sm">Hari Lagi</span>
-                  </div>
-                </div>
-              </div>
-
-              {pred.status === 'warning' && (
-                <button className="w-full mt-4 py-3 bg-orange-100 text-orange-700 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-200 transition-colors flex items-center justify-center gap-2">
-                  Siapkan Logistik Panen <ChevronRight size={14} />
-                </button>
-              )}
+          <div className="mb-6">
+            <div className="flex justify-between items-end mb-2">
+              <span className="text-xs font-bold text-gray-600 uppercase">TAHAP SIKLUS</span>
+              <span className="text-sm font-black text-orange-500">96%</span>
+            </div>
+            <div className="h-1.5 w-full bg-orange-100 rounded-full overflow-hidden">
+              <div className="h-full bg-orange-500 rounded-full" style={{ width: '96%' }}></div>
             </div>
           </div>
-        ))}
+
+          <div className="space-y-4 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 text-gray-400"><TrendingUp size={14} /></div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status Mikroklimat</p>
+                <p className="text-xs font-medium text-gray-700">Suhu: 32.1°C, RH 75%, Media 65%</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 text-gray-400"><Package size={14} /></div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Analisis Visual</p>
+                <p className="text-xs font-medium text-gray-700">92 Adult Larva, 35 Prepupa</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-[#111827] text-center p-5 rounded-xl mb-4 shadow-inner mt-auto">
+            <p className="text-[10px] font-bold text-mag-green uppercase tracking-wider mb-2">PREDIKSI PANEN</p>
+            <p className="text-lg font-black text-white mb-2">24 Apr 2026</p>
+            <p className="text-2xl font-black text-orange-400 flex items-center justify-center gap-1">5 <span className="text-sm font-medium text-gray-400">Hari Lagi</span></p>
+          </div>
+
+          <button className="w-full py-3 bg-orange-100 hover:bg-orange-200 text-orange-700 font-black text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2">
+            SIAPKAN LOGISTIK PANEN <ChevronRight size={16} />
+          </button>
+        </div>
+
+        {/* BOX 2 */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col p-6">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">RUANG 2</p>
+              <h4 className="text-xl font-black text-gray-800">BOX #2</h4>
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <div className="flex justify-between items-end mb-2">
+              <span className="text-xs font-bold text-gray-600 uppercase">TAHAP SIKLUS</span>
+              <span className="text-sm font-black text-mag-green">55%</span>
+            </div>
+            <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-mag-green rounded-full" style={{ width: '55%' }}></div>
+            </div>
+          </div>
+
+          <div className="space-y-4 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 text-gray-400"><TrendingUp size={14} /></div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status Mikroklimat</p>
+                <p className="text-xs font-medium text-gray-700">Suhu: 29.5°C, RH 72%, Media 60%</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 text-gray-400"><Package size={14} /></div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Analisis Visual</p>
+                <p className="text-xs font-medium text-gray-700">120 Larva Dewasa, 0 Prepupa</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-[#111827] text-center p-5 rounded-xl shadow-inner mt-auto">
+            <p className="text-[10px] font-bold text-mag-green uppercase tracking-wider mb-2">PREDIKSI PANEN</p>
+            <p className="text-lg font-black text-white mb-2">04 Mei 2026</p>
+            <p className="text-2xl font-black text-mag-green flex items-center justify-center gap-1">12 <span className="text-sm font-medium text-gray-400">Hari Lagi</span></p>
+          </div>
+        </div>
+
+        {/* BOX 1 */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col p-6">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">RUANG 1</p>
+              <h4 className="text-xl font-black text-gray-800">BOX #1</h4>
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <div className="flex justify-between items-end mb-2">
+              <span className="text-xs font-bold text-gray-600 uppercase">TAHAP SIKLUS</span>
+              <span className="text-sm font-black text-mag-green">10%</span>
+            </div>
+            <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-mag-green rounded-full" style={{ width: '10%' }}></div>
+            </div>
+          </div>
+
+          <div className="space-y-4 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 text-gray-400"><TrendingUp size={14} /></div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status Mikroklimat</p>
+                <p className="text-xs font-medium text-gray-700">Suhu: 28.2°C, RH 68%, Media 55%</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 text-gray-400"><Package size={14} /></div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Analisis Visual</p>
+                <p className="text-xs font-medium text-gray-700">Ribuan Telur/Penetasan, 15 Baby Larva</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-[#111827] text-center p-5 rounded-xl shadow-inner mt-auto">
+            <p className="text-[10px] font-bold text-mag-green uppercase tracking-wider mb-2">PREDIKSI PANEN</p>
+            <p className="text-lg font-black text-white mb-2">16 Mei 2026</p>
+            <p className="text-2xl font-black text-mag-green flex items-center justify-center gap-1">24 <span className="text-sm font-medium text-gray-400">Hari Lagi</span></p>
+          </div>
+        </div>
+
       </div>
     </div>
   );

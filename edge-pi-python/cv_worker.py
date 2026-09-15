@@ -1,85 +1,129 @@
-import cv2
 import sqlite3
+import logging
 import time
+import random # For mock processing if camera not available
+import cv2
 from ultralytics import YOLO
 
-DB_FILE = "local_edge.db"
-MODEL_FILE = "best.pt"
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Assuming classes are: 0: baby_larva, 1: adult_larva, 2: prepupa, 3: pupa
-# If different, this should be adjusted based on the actual model.
-CLASS_NAMES = ["baby_larva", "adult_larva", "prepupa", "pupa"]
+DB_FILE = "edge_local.db"
+MODEL_PATH = "best.pt"
 
-def process_frame(model, frame):
-    results = model(frame, verbose=False)
+# Initialize model globally if exists, else None
+try:
+    model = YOLO(MODEL_PATH)
+    logging.info(f"Successfully loaded YOLOv8 model from {MODEL_PATH}")
+except Exception as e:
+    logging.warning(f"Could not load YOLOv8 model (best.pt might be missing): {e}. Will run in mock mode.")
+    model = None
+
+def get_dominant_phase(counts):
+    """
+    Returns the phase name with the highest count.
+    """
+    if sum(counts.values()) == 0:
+        return "IDLE"
+    return max(counts, key=counts.get)
+
+def process_frame(frame, box_id=1):
+    """
+    Process a single frame to detect maggots and save to DB.
+    """
     counts = {
-        "baby_larva": 0,
-        "adult_larva": 0,
-        "prepupa": 0,
-        "pupa": 0
+        'BABY LARVA': 0,
+        'ADULT LARVA': 0,
+        'PREPUPA': 0,
+        'PUPA': 0
     }
     
-    for r in results:
-        for box in r.boxes:
-            cls_id = int(box.cls[0].item())
-            if cls_id < len(CLASS_NAMES):
-                cls_name = CLASS_NAMES[cls_id]
-                counts[cls_name] += 1
-                
-    return counts
+    if model is not None:
+        try:
+            # Predict using YOLOv8
+            results = model.predict(source=frame, save=False, verbose=False)
+            
+            # Count detected classes
+            if results and len(results) > 0:
+                for box in results[0].boxes:
+                    cls_id = int(box.cls[0].item())
+                    # Assuming class indices map to specific stages, e.g.:
+                    # 0: Baby Larva, 1: Adult Larva, 2: Prepupa, 3: Pupa
+                    # (Adjust mapping based on your actual best.pt training labels)
+                    class_name = results[0].names[cls_id].upper()
+                    
+                    if 'BABY' in class_name:
+                        counts['BABY LARVA'] += 1
+                    elif 'ADULT' in class_name:
+                        counts['ADULT LARVA'] += 1
+                    elif 'PREPUPA' in class_name:
+                        counts['PREPUPA'] += 1
+                    elif 'PUPA' in class_name:
+                        counts['PUPA'] += 1
+                    else:
+                        # Fallback mapping if names match exactly
+                        if class_name in counts:
+                            counts[class_name] += 1
+        except Exception as e:
+            logging.error(f"Error during YOLO prediction: {e}")
+    else:
+        # Mock processing
+        counts['BABY LARVA'] = random.randint(0, 50)
+        counts['ADULT LARVA'] = random.randint(20, 200)
+        counts['PREPUPA'] = random.randint(0, 30)
+        counts['PUPA'] = random.randint(0, 10)
 
-def save_to_db(box_id, counts):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO cv_data (box_id, baby_larva, adult_larva, prepupa, pupa)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (
-        box_id,
-        counts["baby_larva"],
-        counts["adult_larva"],
-        counts["prepupa"],
-        counts["pupa"]
-    ))
-    conn.commit()
-    conn.close()
-    print(f"Saved CV data: {counts}")
+    dominant = get_dominant_phase(counts)
+    
+    save_cv_results(box_id, counts['BABY LARVA'], counts['ADULT LARVA'], counts['PREPUPA'], counts['PUPA'], dominant)
+    return counts, dominant
 
-def run_cv_worker():
-    print(f"Loading YOLOv8 model from {MODEL_FILE}...")
+def save_cv_results(box_id, baby, adult, prepupa, pupa, dominant):
     try:
-        model = YOLO(MODEL_FILE)
-    except Exception as e:
-        print(f"Failed to load model: {e}")
-        return
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO cv_results (box_id, baby_larva, adult_larva, prepupa, pupa, dominant_phase)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (box_id, baby, adult, prepupa, pupa, dominant))
+        conn.commit()
+        conn.close()
+        logging.info(f"Saved CV result for Box {box_id}: Dominant={dominant} (Baby:{baby}, Adult:{adult}, Pre:{prepupa}, Pupa:{pupa})")
+    except sqlite3.Error as e:
+        logging.error(f"Database error saving CV results: {e}")
 
-    # Use default camera
+def run_camera_loop():
+    """
+    Main loop to capture frames from camera periodically.
+    """
+    logging.info("Starting CV Worker Camera Loop...")
+    # Open default camera (index 0). Change if using external USB cam.
     cap = cv2.VideoCapture(0)
     
     if not cap.isOpened():
-        print("Cannot open camera. Running in mock mode...")
-        # Mock mode if camera is not available
+        logging.warning("No camera detected! Running in pure mock mode generating synthetic data every 60s.")
         while True:
-            mock_counts = {"baby_larva": 150, "adult_larva": 300, "prepupa": 50, "pupa": 10}
-            save_to_db(1, mock_counts)
-            time.sleep(10)
+            process_frame(None, box_id=1)
+            process_frame(None, box_id=2)
+            process_frame(None, box_id=3)
+            time.sleep(60)
             
     try:
         while True:
             ret, frame = cap.read()
             if not ret:
-                print("Failed to grab frame.")
-                break
-                
-            counts = process_frame(model, frame)
-            save_to_db(1, counts) # Defaulting to box_id = 1
+                logging.error("Failed to grab frame from camera.")
+                time.sleep(5)
+                continue
             
-            # Wait for 10 seconds before next capture to avoid filling DB too fast
-            time.sleep(10)
+            # Process the live frame for Box 1 (assuming camera is pointing to box 1)
+            process_frame(frame, box_id=1)
+            
+            # Wait for next cycle (e.g., process one frame every 60 seconds to save power)
+            time.sleep(60)
     except KeyboardInterrupt:
-        print("Stopping CV worker...")
+        logging.info("CV Worker stopped by user.")
     finally:
         cap.release()
 
 if __name__ == "__main__":
-    run_cv_worker()
+    run_camera_loop()

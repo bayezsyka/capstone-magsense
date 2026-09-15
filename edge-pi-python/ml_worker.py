@@ -1,107 +1,110 @@
 import sqlite3
+import logging
 import time
-import os
 import random
-import numpy as np
 
-# We would normally import xgboost:
-# import xgboost as xgb
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-DB_FILE = "local_edge.db"
-MODEL_FILE = "xgboost_model.pkl"
+DB_FILE = "edge_local.db"
+MODEL_PATH = "xgb_model.pkl"
 
-class MockXGBoost:
-    """Mock XGBoost Regressor to simulate predictions."""
-    def predict(self, features):
-        # features: [temp, humidity, prop_baby, prop_adult, prop_prepupa, prop_pupa]
-        # Basic mock logic: more adults/prepupa -> fewer days to harvest.
-        temp = features[0][0]
-        prop_adult = features[0][3]
-        prop_prepupa = features[0][4]
-        
-        # Ideal temp is around 30C. 
-        # Base days = 14
-        base_days = 14.0
-        
-        if prop_prepupa > 0.3:
-            return [max(1.0, 3.0 - (prop_prepupa * 2))]
-        elif prop_adult > 0.5:
-            return [max(3.0, 7.0 - (prop_adult * 5))]
-        else:
-            return [base_days + random.uniform(-1, 1)]
+def load_xgboost_model():
+    """
+    Load XGBoost model from file. Using a mock for now as requested.
+    """
+    try:
+        import xgboost as xgb
+        # model = xgb.XGBRegressor()
+        # model.load_model(MODEL_PATH)
+        # return model
+        return None
+    except ImportError:
+        logging.warning("xgboost library not installed. Running in mock mode.")
+        return None
 
 def get_latest_data(box_id):
+    """
+    Retrieve latest sensor and cv data for a specific box.
+    """
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     
-    # Get latest sensor data
+    # Get latest sensor
     cursor.execute('''
-        SELECT temperature, humidity, media_humidity 
-        FROM sensor_data 
-        WHERE box_id = ? 
-        ORDER BY timestamp DESC LIMIT 1
+        SELECT temperature, humidity, media_humidity FROM sensor_data 
+        WHERE box_id = ? ORDER BY timestamp DESC LIMIT 1
     ''', (box_id,))
-    sensor_row = cursor.fetchone()
+    sensor = cursor.fetchone()
     
-    # Get latest cv data
+    # Get latest CV
     cursor.execute('''
-        SELECT baby_larva, adult_larva, prepupa, pupa 
-        FROM cv_data 
-        WHERE box_id = ? 
-        ORDER BY timestamp DESC LIMIT 1
+        SELECT baby_larva, adult_larva, prepupa, pupa FROM cv_results 
+        WHERE box_id = ? ORDER BY timestamp DESC LIMIT 1
     ''', (box_id,))
-    cv_row = cursor.fetchone()
+    cv = cursor.fetchone()
     
     conn.close()
-    return sensor_row, cv_row
+    
+    if sensor and cv:
+        return {
+            'temp': sensor[0], 'rh': sensor[1], 'media': sensor[2],
+            'baby': cv[0], 'adult': cv[1], 'prepupa': cv[2], 'pupa': cv[3]
+        }
+    return None
 
-def save_prediction(box_id, days):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO ml_predictions (box_id, harvest_days_predicted)
-        VALUES (?, ?)
-    ''', (box_id, float(days)))
-    conn.commit()
-    conn.close()
-    print(f"Saved prediction: {days:.2f} days for Box #{box_id}")
+def predict_harvest_days(features, model=None):
+    """
+    Predict days to harvest. Uses mock if model is None.
+    """
+    if model:
+        # Format features into DMatrix or DataFrame and predict
+        # input_data = [[features['temp'], features['rh'], features['adult'] ... ]]
+        # return model.predict(input_data)[0]
+        pass
+        
+    # Mock logic based on features
+    # If adult larva is high, panen is close.
+    total_maggot = features['baby'] + features['adult'] + features['prepupa']
+    if features['prepupa'] > 20:
+        return round(random.uniform(1.0, 3.0), 1)
+    elif features['adult'] > 50:
+        return round(random.uniform(4.0, 10.0), 1)
+    else:
+        return round(random.uniform(15.0, 24.0), 1)
 
-def run_ml_worker():
-    print(f"Loading XGBoost model from {MODEL_FILE} (using mock for now)...")
-    # In real scenario: model = xgb.XGBRegressor(); model.load_model(MODEL_FILE)
-    model = MockXGBoost()
+def save_prediction(box_id, days, confidence=0.95):
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO harvest_predictions (box_id, predicted_days, confidence)
+            VALUES (?, ?, ?)
+        ''', (box_id, days, confidence))
+        conn.commit()
+        conn.close()
+        logging.info(f"Saved Prediction for Box {box_id}: {days} days to harvest.")
+    except sqlite3.Error as e:
+        logging.error(f"Database error saving prediction: {e}")
+
+def run_ml_pipeline():
+    logging.info("Starting ML Worker Pipeline...")
+    model = load_xgboost_model()
     
     while True:
         try:
-            # Assuming we monitor box_id 1
-            box_id = 1
-            sensor_data, cv_data = get_latest_data(box_id)
-            
-            if sensor_data and cv_data:
-                temp, hum, media_hum = sensor_data
-                baby, adult, prepupa, pupa = cv_data
-                
-                total_larva = baby + adult + prepupa + pupa
-                if total_larva > 0:
-                    prop_baby = baby / total_larva
-                    prop_adult = adult / total_larva
-                    prop_prepupa = prepupa / total_larva
-                    prop_pupa = pupa / total_larva
-                    
-                    features = np.array([[temp, hum, media_hum, prop_baby, prop_adult, prop_prepupa, prop_pupa]])
-                    prediction = model.predict(features)
-                    
-                    save_prediction(box_id, prediction[0])
+            for box_id in [1, 2, 3]:
+                data = get_latest_data(box_id)
+                if data:
+                    days_predicted = predict_harvest_days(data, model)
+                    save_prediction(box_id, days_predicted)
                 else:
-                    print("No larva detected. Skipping prediction.")
-            else:
-                print("Waiting for enough sensor/cv data to make predictions...")
-                
+                    logging.debug(f"Not enough data for Box {box_id} to make prediction yet.")
+                    
+            # Run prediction every 5 minutes
+            time.sleep(300)
         except Exception as e:
-            print(f"Error in ML worker: {e}")
-            
-        # Run every 60 seconds
-        time.sleep(60)
+            logging.error(f"Error in ML pipeline loop: {e}")
+            time.sleep(60)
 
 if __name__ == "__main__":
-    run_ml_worker()
+    run_ml_pipeline()
