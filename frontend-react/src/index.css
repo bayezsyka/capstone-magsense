@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme {
+  --color-mag-green: #00b074;
+  --color-mag-dark: #111827;
+  --color-mag-darker: #0b0f19;
+  --color-mag-card: #1f2937;
+}
+
+@layer base {
+  body {
+    @apply bg-mag-darker text-white;
+    font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+}

@@ -1,0 +1,6 @@
+paho-mqtt
+ultralytics
+xgboost
+requests
+python-dotenv
+opencv-python
