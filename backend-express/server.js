@@ -83,7 +83,7 @@ io.on('connection', (socket) => {
                 }
             }
         };
-        
+
         socket.emit('sensor-update', mockData);
     }, 3000);
 
