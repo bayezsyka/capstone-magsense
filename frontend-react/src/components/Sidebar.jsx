@@ -24,20 +24,22 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
   const menuItems = allMenuItems.filter(item => item.roles.includes(userRole));
 
   return (
-    <div className={`fixed inset-y-0 left-0 w-72 bg-white/90 backdrop-blur-xl border-r border-slate-200 shadow-2xl flex flex-col min-h-screen z-40 transition-transform duration-300 ease-in-out md:relative md:w-64 md:translate-x-0 md:bg-white/80 md:shadow-soft ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+    <div 
+      className={`group fixed inset-y-0 left-0 bg-white/90 backdrop-blur-xl border-r border-slate-200 shadow-2xl flex flex-col min-h-screen z-40 transition-all duration-300 ease-in-out md:relative md:translate-x-0 md:bg-white/80 md:shadow-soft ${isOpen ? 'translate-x-0 w-72' : '-translate-x-full w-72'} md:w-20 hover:md:w-64`}
+    >
       
-      <div className="flex items-center justify-between p-6 mb-2">
+      <div className="flex items-center justify-between p-6 mb-2 overflow-hidden whitespace-nowrap">
         <div 
-          className={`flex items-center space-x-3 transition-all duration-300 ${userRole === 'admin' ? '' : 'cursor-pointer hover:opacity-80'}`} 
+          className={`flex items-center transition-all duration-300 ${userRole === 'admin' ? '' : 'cursor-pointer hover:opacity-80'}`} 
           onClick={() => {
               if (userRole !== 'admin') navigate('/dashboard');
               setIsOpen(false);
           }}
         >
-          <div className="w-12 h-12 flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 md:w-8 md:h-8 group-hover:md:w-12 group-hover:md:h-12 flex items-center justify-center shrink-0 transition-all duration-300">
             <img src={maggotLogo} alt="Maggot Logo" className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-xl font-bold text-gray-800">
+          <h1 className="text-xl font-bold text-gray-800 ml-3 md:opacity-0 md:w-0 md:ml-0 group-hover:md:opacity-100 group-hover:md:w-auto group-hover:md:ml-3 transition-all duration-300">
             MAG-<span className="text-mag-green">SENSE</span>
           </h1>
         </div>
@@ -48,36 +50,44 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
         </button>
       </div>
 
-      <nav className="flex-1 px-4 space-y-2 overflow-y-auto">
+      <nav className="flex-1 px-3 space-y-2 overflow-y-auto overflow-x-hidden">
         {menuItems.map((item, index) => (
           <NavLink
             key={index}
             to={item.path}
             onClick={() => setIsOpen(false)}
             className={({ isActive }) => 
-              `flex items-center space-x-3 px-4 py-3.5 md:py-3 rounded-2xl transition-all duration-300 font-medium ${
+              `flex items-center px-4 py-3.5 md:py-3 rounded-2xl transition-all duration-300 font-medium whitespace-nowrap overflow-hidden ${
                 isActive 
                   ? 'bg-gradient-to-r from-mag-green to-emerald-400 text-white shadow-[0_4px_12px_rgba(16,185,129,0.3)] hover:-translate-y-0.5' 
                   : 'text-slate-500 hover:bg-slate-50 hover:text-mag-green hover:-translate-y-0.5'
               }`
             }
           >
-            {item.icon}
-            <span className="font-bold">{item.label}</span>
+            <div className="shrink-0 flex items-center justify-center">
+              {item.icon}
+            </div>
+            <span className="font-bold ml-3 md:opacity-0 md:w-0 md:ml-0 group-hover:md:opacity-100 group-hover:md:w-auto group-hover:md:ml-3 transition-all duration-300">
+              {item.label}
+            </span>
           </NavLink>
         ))}
       </nav>
 
-      <div className="p-4 border-t border-slate-200">
+      <div className="p-4 border-t border-slate-200 overflow-hidden whitespace-nowrap">
         <button 
           onClick={() => {
             logout();
             navigate('/login');
           }}
-          className="flex items-center space-x-3 px-4 py-3.5 md:py-3 text-red-500 hover:bg-red-50 hover:text-red-600 rounded-2xl w-full transition-all duration-300 font-bold hover:shadow-soft hover:-translate-y-0.5"
+          className="flex items-center px-4 py-3.5 md:py-3 text-red-500 hover:bg-red-50 hover:text-red-600 rounded-2xl w-full transition-all duration-300 font-bold hover:shadow-soft hover:-translate-y-0.5"
         >
-          <LogOut size={20} />
-          <span>Logout</span>
+          <div className="shrink-0 flex items-center justify-center">
+            <LogOut size={20} />
+          </div>
+          <span className="ml-3 md:opacity-0 md:w-0 md:ml-0 group-hover:md:opacity-100 group-hover:md:w-auto group-hover:md:ml-3 transition-all duration-300">
+            Logout
+          </span>
         </button>
       </div>
     </div>

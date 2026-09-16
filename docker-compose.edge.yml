@@ -1,0 +1,48 @@
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    command: sh -c "echo 'allow_anonymous true\nlistener 1883 0.0.0.0' > /mosquitto/config/mosquitto.conf && mosquitto -c /mosquitto/config/mosquitto.conf"
+
+  edge-python:
+    build:
+      context: ./edge-pi-python
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - mqtt-broker
+    environment:
+      - MQTT_BROKER=mqtt-broker
+      - MQTT_PORT=1883
+      - SYNC_URL=http://backend-pusat.com/api/edge-sync  # Sesuaikan dengan URL Cloud backend Anda
+    volumes:
+      - edge-data:/app/data
+    # WARNING: Baris 'devices' di bawah dimatikan sementara untuk testing di Windows. 
+    # NYALAKAN KEMBALI saat akan di-deploy ke Raspberry Pi.
+    # devices:
+    #   - /dev/video0:/dev/video0
+
+  edge-backend:
+    build:
+      context: ./backend-express
+      dockerfile: Dockerfile.edge
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - DATA_SOURCE=sqlite
+      - SQLITE_DB_PATH=/app/data/edge_local.db
+    volumes:
+      - edge-data:/app/data  # Berbagi volume database SQLite lokal yang sama dengan edge-python
+
+volumes:
+  mosquitto-data:
+  mosquitto-log:
+  edge-data:

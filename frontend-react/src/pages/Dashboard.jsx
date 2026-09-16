@@ -7,7 +7,7 @@ import ErrorBoundary from '../components/ErrorBoundary';
 
 const Dashboard = () => {
   const { realtimeData, isConnected } = useWebSocket();
-  
+
   const [sensorData, setSensorData] = useState({
     boxes: [
       { id: 1, temp: '--', humidity: '--' },
@@ -25,7 +25,7 @@ const Dashboard = () => {
       }
     }
   });
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -53,10 +53,10 @@ const Dashboard = () => {
     if (realtimeData) {
       // realtimeData is an array of sensor readings from Edge
       // Example: [{box_id: 1, air_temp: 28.5, air_humidity: 70, media_humidity: 45}]
-      
+
       const newBoxes = [...sensorData.boxes];
       let newCurrentBox = { ...sensorData.currentBox };
-      
+
       // Update data based on incoming payload
       if (Array.isArray(realtimeData)) {
         realtimeData.forEach(reading => {
@@ -69,7 +69,7 @@ const Dashboard = () => {
               humidity: reading.air_humidity || newBoxes[boxIndex].humidity
             };
           }
-          
+
           // Update Current Box detailed view (assuming focusing on Box 1)
           if (reading.box_id === 1) {
             newCurrentBox = {
@@ -81,7 +81,7 @@ const Dashboard = () => {
           }
         });
       }
-      
+
       setSensorData(prev => ({
         ...prev,
         boxes: newBoxes,
@@ -92,7 +92,7 @@ const Dashboard = () => {
 
   // Memoize top boxes to avoid re-rendering them unless their data changes
   const memoizedBoxes = useMemo(() => sensorData.boxes, [sensorData.boxes]);
-  
+
   if (error) {
     throw new Error(error); // Caught by ErrorBoundary
   }
@@ -170,11 +170,11 @@ const Dashboard = () => {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {Object.entries(sensorData.currentBox.actuators).map(([key, value]) => (
                 <div key={key} className={`border rounded-xl p-4 flex flex-col items-center justify-center transition-all duration-300 ${value === 'ON' ? 'bg-mag-green/10 border-mag-green/30' : 'bg-gray-50 border-gray-100'}`}>
-                    {key === 'heater' && <Thermometer size={24} className={`mb-2 ${value === 'ON' ? 'text-mag-green' : 'text-gray-300'}`} />}
-                    {key === 'kipas' && <Wind size={24} className={`mb-2 ${value === 'ON' ? 'text-blue-500' : 'text-gray-300'}`} />}
-                    {key === 'pompa' && <Droplets size={24} className={`mb-2 ${value === 'ON' ? 'text-blue-400' : 'text-gray-300'}`} />}
-                    <p className={`text-xs font-bold uppercase tracking-wider transition-colors ${value === 'ON' ? 'text-gray-800' : 'text-gray-400'}`}>{key}</p>
-                    <p className={`text-[10px] mt-1 font-bold transition-colors ${value === 'ON' ? 'text-mag-green' : 'text-gray-300'}`}>{value}</p>
+                  {key === 'heater' && <Thermometer size={24} className={`mb-2 ${value === 'ON' ? 'text-mag-green' : 'text-gray-300'}`} />}
+                  {key === 'kipas' && <Wind size={24} className={`mb-2 ${value === 'ON' ? 'text-blue-500' : 'text-gray-300'}`} />}
+                  {key === 'pompa' && <Droplets size={24} className={`mb-2 ${value === 'ON' ? 'text-blue-400' : 'text-gray-300'}`} />}
+                  <p className={`text-xs font-bold uppercase tracking-wider transition-colors ${value === 'ON' ? 'text-gray-800' : 'text-gray-400'}`}>{key}</p>
+                  <p className={`text-[10px] mt-1 font-bold transition-colors ${value === 'ON' ? 'text-mag-green' : 'text-gray-300'}`}>{value}</p>
                 </div>
               ))}
             </div>
@@ -186,7 +186,7 @@ const Dashboard = () => {
           {/* Prediction Card */}
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl p-8 shadow-xl text-white relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl">
             <div className="absolute -top-10 -right-10 p-4 opacity-10 transform rotate-12">
-                <Sprout size={160} />
+              <Sprout size={160} />
             </div>
             <h3 className="text-xs font-bold text-mag-green tracking-wider uppercase mb-6">Prediksi Panen Terdekat</h3>
             <div className="flex items-end mb-4">

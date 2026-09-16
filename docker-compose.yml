@@ -10,7 +10,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./backend-express/database.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -19,7 +19,7 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: ./backend-express
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
@@ -41,27 +41,19 @@ services:
       postgres:
         condition: service_healthy
 
-  backend-py:
-    build:
-      context: ./backend-py
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    ports:
-      - "5002:5002"
 
   frontend:
     build:
-      context: ./frontend
+      context: ./frontend-react
       dockerfile: Dockerfile
       args:
         VITE_API_URL: ""
         VITE_PYTHON_URL: "http://localhost:5002"
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3000:80"
     depends_on:
       - backend
-      - backend-py
 
 volumes:
   pgdata:
