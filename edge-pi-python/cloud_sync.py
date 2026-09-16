@@ -8,7 +8,9 @@ import paho.mqtt.publish as publish
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 DB_FILE = "edge_local.db"
-CLOUD_API_URL = "http://localhost:5000/api/edge-sync"
+import os
+CLOUD_API_URL = os.environ.get("SYNC_URL", "http://edge-backend:5000/api/edge-sync")
+EDGE_BACKEND_URL = os.environ.get("EDGE_BACKEND_URL", "http://edge-backend:5000")
 
 def get_unsynced_data(table, columns):
     """
@@ -32,6 +34,8 @@ def get_unsynced_data(table, columns):
                     record['air_temp'] = row[idx+1]
                 elif col == 'humidity':
                     record['air_humidity'] = row[idx+1]
+                elif col == 'actuator_type':
+                    record['type'] = row[idx+1]
                 else:
                     record[col] = row[idx+1]
             result.append(record)
@@ -55,13 +59,33 @@ def mark_as_synced(table, ids):
     except sqlite3.Error as e:
         logging.error(f"Error marking {table} as synced: {e}")
 
+def cleanup_synced_data(days=7):
+    """
+    Delete rows that are synced and older than a specified number of days.
+    """
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        tables_to_clean = ['sensor_data', 'actuator_logs', 'cv_results', 'harvest_predictions']
+        for table in tables_to_clean:
+            cursor.execute(f"DELETE FROM {table} WHERE synced = 1 AND timestamp < datetime('now', '-{days} days')")
+            deleted_count = cursor.rowcount
+            if deleted_count > 0:
+                logging.info(f"Cleaned up {deleted_count} old synced records from {table}")
+                
+        conn.commit()
+        conn.close()
+    except sqlite3.Error as e:
+        logging.error(f"Error during cleanup: {e}")
+
 def pull_thresholds():
     """
     HTTP GET to /api/automation-thresholds on backend.
     If success, update local SQLite and publish via MQTT to ESP32.
     """
     try:
-        response = requests.get("http://localhost:5000/api/automation-thresholds", timeout=10)
+        response = requests.get(f"{EDGE_BACKEND_URL}/api/automation-thresholds", timeout=10)
         if response.status_code == 200:
             thresholds = response.json()
             if thresholds and len(thresholds) > 0:
@@ -93,7 +117,7 @@ def pull_thresholds():
                 })
                 
                 # Publish ke MQTT Broker lokal
-                publish.single("maggot/kontrol/threshold", payload=mqtt_payload, hostname="localhost")
+                publish.single("maggot/kontrol/threshold", payload=mqtt_payload, hostname=os.environ.get("MQTT_BROKER", "mqtt-broker"))
                 logging.info(f"Thresholds updated and published to MQTT: {mqtt_payload}")
                 
     except requests.exceptions.RequestException as e:
@@ -107,7 +131,7 @@ def run_cloud_sync():
     # Define tables and their columns to sync (excluding id and synced flag)
     tables_to_sync = {
         'sensor_data': ['box_id', 'temperature', 'humidity', 'media_humidity', 'timestamp'],
-        'actuator_logs': ['box_id', 'type', 'status', 'timestamp'],
+        'actuator_logs': ['box_id', 'actuator_type', 'status', 'timestamp'],
         'cv_results': ['box_id', 'baby_larva', 'adult_larva', 'prepupa', 'pupa', 'dominant_phase', 'timestamp'],
         'harvest_predictions': ['box_id', 'predicted_days', 'confidence', 'timestamp']
     }
@@ -140,6 +164,9 @@ def run_cloud_sync():
                     
             # 4. Ambil aturan otomasi terbaru dari Cloud ke Edge
             pull_thresholds()
+            
+            # 5. Cleanup old synced data
+            cleanup_synced_data(days=7)
             
         except requests.exceptions.RequestException as e:
             logging.error(f"Network error during sync: {e}")

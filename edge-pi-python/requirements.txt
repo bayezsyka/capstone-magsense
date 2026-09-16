@@ -5,3 +5,4 @@ requests
 aiortc
 aiohttp
 opencv-python
+pandas

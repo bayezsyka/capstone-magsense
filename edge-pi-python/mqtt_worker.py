@@ -7,7 +7,8 @@ import time
 # Logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-MQTT_BROKER = "localhost" # Assuming Mosquitto is running locally on Pi
+import os
+MQTT_BROKER = os.environ.get("MQTT_BROKER", "localhost") # Assuming Mosquitto is running locally on Pi
 MQTT_PORT = 1883
 MQTT_TOPIC_SENSOR = "maggot/sensor/data"
 DB_FILE = "edge_local.db"
