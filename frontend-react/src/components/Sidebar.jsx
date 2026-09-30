@@ -11,7 +11,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
   const userRole = user?.role?.toLowerCase() || '';
 
   const allMenuItems = [
-    { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/dashboard', roles: ['pembudidaya'] },
+    { icon: <LayoutDashboard size={20} />, label: 'Dasbor', path: '/dashboard', roles: ['pembudidaya'] },
     { icon: <Thermometer size={20} />, label: 'Mikroklimat', path: '/monitoring', roles: ['pembudidaya'] },
     { icon: <Sprout size={20} />, label: 'Fase Pertumbuhan', path: '/growth', roles: ['pembudidaya'] },
     { icon: <Activity size={20} />, label: 'Prediksi Panen', path: '/prediction', roles: ['pembudidaya'] },
@@ -86,7 +86,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
             <LogOut size={20} />
           </div>
           <span className="ml-3 md:opacity-0 md:w-0 md:ml-0 group-hover:md:opacity-100 group-hover:md:w-auto group-hover:md:ml-3 transition-all duration-300">
-            Logout
+            Keluar
           </span>
         </button>
       </div>

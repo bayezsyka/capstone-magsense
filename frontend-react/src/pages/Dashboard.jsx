@@ -101,7 +101,7 @@ const Dashboard = () => {
     <ErrorBoundary>
       <div className="flex items-center space-x-2 mb-6">
         <Activity className="text-mag-green" size={24} />
-        <h2 className="text-xl font-bold text-gray-800 uppercase tracking-wide">Dashboard Ringkasan</h2>
+        <h2 className="text-xl font-bold text-gray-800 uppercase tracking-wide">Ringkasan Dasbor</h2>
       </div>
 
       {/* Top Boxes */}
@@ -142,11 +142,11 @@ const Dashboard = () => {
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center space-x-2">
               <Zap className="text-orange-400" size={20} />
-              <h3 className="font-bold text-gray-800 tracking-wide uppercase text-sm">Status Real-Time Box #1</h3>
+              <h3 className="font-bold text-gray-800 tracking-wide uppercase text-sm">Status Langsung Box #1</h3>
             </div>
             <div className="flex items-center space-x-2 bg-green-50 px-3 py-1 rounded-full">
               <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'} transition-colors`}></div>
-              <span className="text-xs font-bold text-mag-green">{isConnected ? 'LIVE SYSTEM' : 'DISCONNECTED'}</span>
+              <span className="text-xs font-bold text-mag-green">{isConnected ? 'SISTEM AKTIF' : 'TERPUTUS'}</span>
             </div>
           </div>
 
@@ -173,7 +173,7 @@ const Dashboard = () => {
                   {key === 'heater' && <Thermometer size={24} className={`mb-2 ${value === 'ON' ? 'text-mag-green' : 'text-gray-300'}`} />}
                   {key === 'kipas' && <Wind size={24} className={`mb-2 ${value === 'ON' ? 'text-blue-500' : 'text-gray-300'}`} />}
                   {key === 'pompa' && <Droplets size={24} className={`mb-2 ${value === 'ON' ? 'text-blue-400' : 'text-gray-300'}`} />}
-                  <p className={`text-xs font-bold uppercase tracking-wider transition-colors ${value === 'ON' ? 'text-gray-800' : 'text-gray-400'}`}>{key}</p>
+                  <p className={`text-xs font-bold uppercase tracking-wider transition-colors ${value === 'ON' ? 'text-gray-800' : 'text-gray-400'}`}>{key === 'heater' ? 'Pemanas' : key}</p>
                   <p className={`text-[10px] mt-1 font-bold transition-colors ${value === 'ON' ? 'text-mag-green' : 'text-gray-300'}`}>{value}</p>
                 </div>
               ))}
@@ -212,12 +212,12 @@ const Dashboard = () => {
               <div className="flex justify-between items-center border-b border-gray-50 pb-2">
                 <span className="text-sm text-gray-500">Status WebSocket</span>
                 <span className={`text-sm font-semibold ${isConnected ? 'text-mag-green' : 'text-red-500'}`}>
-                  {isConnected ? 'Online' : 'Offline'}
+                  {isConnected ? 'Terhubung' : 'Terputus'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-500">Database API</span>
-                <span className="text-sm font-semibold text-mag-green">Connected</span>
+                <span className="text-sm font-semibold text-mag-green">Terhubung</span>
               </div>
             </div>
           </div>

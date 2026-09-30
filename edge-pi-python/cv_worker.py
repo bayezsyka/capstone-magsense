@@ -2,6 +2,7 @@ import os
 import sqlite3
 import logging
 import time
+import base64
 import random # For mock processing if camera not available
 import cv2
 from ultralytics import YOLO
@@ -21,11 +22,16 @@ except Exception as e:
 
 def get_dominant_phase(counts):
     """
-    Returns the phase name with the highest count.
+    Returns the phase name with the highest count or 'Campuran: ...' if tied.
     """
-    if sum(counts.values()) == 0:
+    total = sum(counts.values())
+    if total == 0:
         return "IDLE"
-    return max(counts, key=counts.get)
+    max_count = max(counts.values())
+    top_phases = [k for k, v in counts.items() if v == max_count]
+    if len(top_phases) > 1:
+        return f"Campuran: {', '.join(top_phases)}"
+    return top_phases[0]
 
 def process_frame(frame, box_id=1):
     """
@@ -78,22 +84,37 @@ def process_frame(frame, box_id=1):
         counts['PREPUPA'] = random.randint(0, 30)
         counts['PUPA'] = random.randint(0, 10)
 
+    total_detected = sum(counts.values())
+    
+    # Convert image to Base64 and save to DB
+    if not is_mock and frame is not None:
+        # Encode frame as JPEG
+        success, buffer = cv2.imencode('.jpg', frame)
+        if success:
+            b64_str = base64.b64encode(buffer).decode('utf-8')
+            image_path = f"data:image/jpeg;base64,{b64_str}"
+        else:
+            image_path = ""
+    else:
+        image_path = ""
+        
     dominant = get_dominant_phase(counts)
     
-    save_cv_results(box_id, counts['BABY LARVA'], counts['ADULT LARVA'], counts['PREPUPA'], counts['PUPA'], dominant)
+    save_cv_results(box_id, counts['BABY LARVA'], counts['ADULT LARVA'], counts['PREPUPA'], counts['PUPA'], total_detected, dominant, image_path)
     return counts, dominant
 
-def save_cv_results(box_id, baby, adult, prepupa, pupa, dominant):
+def save_cv_results(box_id, baby, adult, prepupa, pupa, total_detected, dominant, image_path):
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO cv_results (box_id, baby_larva, adult_larva, prepupa, pupa, dominant_phase)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (box_id, baby, adult, prepupa, pupa, dominant))
+            INSERT INTO cv_results (box_id, baby_larva, adult_larva, prepupa, pupa, total_detected, dominant_phase, image_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (box_id, baby, adult, prepupa, pupa, total_detected, dominant, image_path))
         conn.commit()
         conn.close()
-        logging.info(f"Saved CV result for Box {box_id}: Dominant={dominant} (Baby:{baby}, Adult:{adult}, Pre:{prepupa}, Pupa:{pupa})")
+        img_log = image_path[:30] + "..." if len(image_path) > 30 else image_path
+        logging.info(f"Saved CV result Box {box_id}: Dominant={dominant}, Total={total_detected}, Img={img_log}")
     except sqlite3.Error as e:
         logging.error(f"Database error saving CV results: {e}")
 
@@ -106,12 +127,12 @@ def run_camera_loop():
     cap = cv2.VideoCapture(0)
     
     if not cap.isOpened():
-        logging.warning("No camera detected! Running in pure mock mode generating synthetic data every 60s.")
+        logging.warning("No camera detected! Running in pure mock mode generating synthetic data every 10s.")
         while True:
             process_frame(None, box_id=1)
             process_frame(None, box_id=2)
             process_frame(None, box_id=3)
-            time.sleep(60)
+            time.sleep(10)
             
     try:
         while True:
@@ -124,8 +145,8 @@ def run_camera_loop():
             # Process the live frame for Box 1 (assuming camera is pointing to box 1)
             process_frame(frame, box_id=1)
             
-            # Wait for next cycle (e.g., process one frame every 60 seconds to save power)
-            time.sleep(60)
+            # Wait for next cycle (e.g., process one frame every 10 seconds to save power)
+            time.sleep(10)
     except KeyboardInterrupt:
         logging.info("CV Worker stopped by user.")
     except Exception as e:

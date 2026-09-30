@@ -41,7 +41,9 @@ def init_db():
             adult_larva INTEGER,
             prepupa INTEGER,
             pupa INTEGER,
+            total_detected INTEGER,
             dominant_phase TEXT,
+            image_path TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             synced INTEGER DEFAULT 0
         )
