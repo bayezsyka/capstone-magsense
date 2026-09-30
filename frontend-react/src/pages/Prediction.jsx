@@ -122,7 +122,7 @@ export default function Prediction() {
               <div className="mt-0.5 text-slate-400"><Package size={16} /></div>
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Analisis Visual</p>
-                <p className="text-sm font-bold text-slate-700">92 Adult Larva, 35 Prepupa</p>
+                <p className="text-sm font-bold text-slate-700">92 Larva Dewasa, 35 Prepupa</p>
               </div>
             </div>
           </div>
@@ -215,7 +215,7 @@ export default function Prediction() {
               <div className="mt-0.5 text-slate-400"><Package size={16} /></div>
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Analisis Visual</p>
-                <p className="text-sm font-bold text-slate-700">Ribuan Telur/Penetasan, 15 Baby Larva</p>
+                <p className="text-sm font-bold text-slate-700">Ribuan Telur/Penetasan, 15 Larva Bayi</p>
               </div>
             </div>
           </div>

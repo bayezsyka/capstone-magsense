@@ -14,7 +14,18 @@ const TopNav = ({ onMenuClick }) => {
   const notifRef = useRef(null);
   
   const pathName = location.pathname.split('/')[1] || 'Dashboard';
-  const pageTitle = pathName.charAt(0).toUpperCase() + pathName.slice(1).replace('-', ' ');
+  const titles = {
+    'dashboard': 'Dasbor',
+    'monitoring': 'Mikroklimat',
+    'growth': 'Fase Pertumbuhan',
+    'prediction': 'Prediksi Panen',
+    'history': 'Riwayat Data',
+    'thresholds': 'Parameter Ambang',
+    'manajemen-pengguna': 'Manajemen Pengguna',
+    'manajemen-box': 'Manajemen Box',
+    'profile': 'Profil'
+  };
+  const pageTitle = titles[pathName.toLowerCase()] || pathName.charAt(0).toUpperCase() + pathName.slice(1).replace('-', ' ');
   const initials = user?.username ? user.username.substring(0, 2).toUpperCase() : 'US';
 
   const fetchNotif = async () => {
@@ -115,8 +126,8 @@ const TopNav = ({ onMenuClick }) => {
         
         <Link to="/profile" className="flex items-center space-x-3 cursor-pointer hover:opacity-80 transition-opacity">
           <div className="text-right hidden md:block">
-            <p className="text-[10px] font-black text-mag-green uppercase tracking-wider">{user?.role || 'Active Role'}</p>
-            <p className="text-sm font-bold text-slate-800">{user?.username || 'User Profile'}</p>
+            <p className="text-[10px] font-black text-mag-green uppercase tracking-wider">{user?.role || 'Peran Aktif'}</p>
+            <p className="text-sm font-bold text-slate-800">{user?.username || 'Profil Pengguna'}</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-100 to-green-50 border-2 border-white shadow-soft flex items-center justify-center shrink-0">
             <span className="text-mag-green font-black text-sm">{initials}</span>
