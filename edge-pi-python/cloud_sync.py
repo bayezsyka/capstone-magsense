@@ -7,7 +7,7 @@ from local_db import init_db, get_db_connection
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [CLOUD SYNC] - %(message)s")
 
-SYNC_URL = os.environ.get("SYNC_URL", "http://backend:5000/api/edge-sync")
+SYNC_URL = os.environ.get("SYNC_URL", "https://api-capstone.sangkolo.my.id/api/edge-sync")
 SYNC_INTERVAL_SEC = int(os.environ.get("SYNC_INTERVAL_SEC", 10))
 
 def get_unsynced_records(table_name, limit=50):
