@@ -1,20 +1,20 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Growth from './pages/Growth';
-import History from './pages/History';
-import Monitoring from './pages/Monitoring';
-import Prediction from './pages/Prediction';
-import Profile from './pages/Profile';
-import Thresholds from './pages/Thresholds';
-import ManajemenPengguna from './pages/ManajemenPengguna';
-import ManajemenBox from './pages/ManajemenBox';
-import AppLayout from './components/AppLayout';
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import Growth from "./pages/Growth";
+import History from "./pages/History";
+import Monitoring from "./pages/Monitoring";
+import Prediction from "./pages/Prediction";
+import Profile from "./pages/Profile";
+import Thresholds from "./pages/Thresholds";
+import ManajemenPengguna from "./pages/ManajemenPengguna";
+import ManajemenBox from "./pages/ManajemenBox";
+import AppLayout from "./components/AppLayout";
 
-import { GlobalProvider, useGlobalContext } from './context/GlobalContext';
+import { GlobalProvider, useGlobalContext } from "./context/GlobalContext";
 
-const ProtectedRoute = ({ children, requiredRole }) => {
+const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, token } = useGlobalContext();
   
   if (!token || !user) {
@@ -22,11 +22,12 @@ const ProtectedRoute = ({ children, requiredRole }) => {
   }
 
   try {
-    // Check role if required
-    if (requiredRole) {
-      if (user.role !== requiredRole && user.role?.toLowerCase() !== requiredRole.toLowerCase()) {
-        // If not authorized for this route, redirect based on their role
-        if (user.role?.toLowerCase() === 'admin') {
+    if (allowedRoles && allowedRoles.length > 0) {
+      const userRole = (user.role || "").toLowerCase();
+      const rolesNormalized = allowedRoles.map(r => r.toLowerCase());
+      
+      if (!rolesNormalized.includes(userRole)) {
+        if (userRole === "admin") {
            return <Navigate to="/manajemen-pengguna" replace />;
         } else {
            return <Navigate to="/dashboard" replace />;
@@ -40,8 +41,8 @@ const ProtectedRoute = ({ children, requiredRole }) => {
   }
 };
 
-import { Toaster } from 'react-hot-toast';
-import OfflineReady from './components/OfflineReady';
+import { Toaster } from "react-hot-toast";
+import OfflineReady from "./components/OfflineReady";
 
 function App() {
   return (
@@ -54,20 +55,22 @@ function App() {
           
           {/* Protected/Layout Routes */}
           <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-            {/* Pembudidaya Only Routes */}
-            <Route path="/dashboard" element={<ProtectedRoute requiredRole="pembudidaya"><Dashboard /></ProtectedRoute>} />
-            <Route path="/growth" element={<ProtectedRoute requiredRole="pembudidaya"><Growth /></ProtectedRoute>} />
-            <Route path="/history" element={<ProtectedRoute requiredRole="pembudidaya"><History /></ProtectedRoute>} />
-            <Route path="/monitoring" element={<ProtectedRoute requiredRole="pembudidaya"><Monitoring /></ProtectedRoute>} />
-            <Route path="/prediction" element={<ProtectedRoute requiredRole="pembudidaya"><Prediction /></ProtectedRoute>} />
-            <Route path="/thresholds" element={<ProtectedRoute requiredRole="pembudidaya"><Thresholds /></ProtectedRoute>} />
+            {/* Operational Routes for Pembudidaya & Operator */}
+            <Route path="/dashboard" element={<ProtectedRoute allowedRoles={["pembudidaya", "operator"]}><Dashboard /></ProtectedRoute>} />
+            <Route path="/growth" element={<ProtectedRoute allowedRoles={["pembudidaya", "operator"]}><Growth /></ProtectedRoute>} />
+            <Route path="/history" element={<ProtectedRoute allowedRoles={["pembudidaya", "operator"]}><History /></ProtectedRoute>} />
+            <Route path="/monitoring" element={<ProtectedRoute allowedRoles={["pembudidaya", "operator"]}><Monitoring /></ProtectedRoute>} />
+            <Route path="/prediction" element={<ProtectedRoute allowedRoles={["pembudidaya", "operator"]}><Prediction /></ProtectedRoute>} />
+            <Route path="/thresholds" element={<ProtectedRoute allowedRoles={["pembudidaya", "operator"]}><Thresholds /></ProtectedRoute>} />
             
-            {/* Profile bisa diakses semua */}
+            {/* Profile */}
             <Route path="/profile" element={<Profile />} />
+
+            {/* Admin Only Routes */}
             <Route 
               path="/manajemen-pengguna" 
               element={
-                <ProtectedRoute requiredRole="admin">
+                <ProtectedRoute allowedRoles={["admin"]}>
                   <ManajemenPengguna />
                 </ProtectedRoute>
               } 
@@ -75,7 +78,7 @@ function App() {
             <Route 
               path="/manajemen-box" 
               element={
-                <ProtectedRoute requiredRole="admin">
+                <ProtectedRoute allowedRoles={["admin"]}>
                   <ManajemenBox />
                 </ProtectedRoute>
               } 
