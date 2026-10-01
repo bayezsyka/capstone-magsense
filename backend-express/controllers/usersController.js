@@ -66,7 +66,7 @@ exports.updateProfile = async (req, res) => {
             return res.status(400).json({ error: 'Nama pengguna tidak boleh kosong' });
         }
         const result = await pool.query(
-            'UPDATE users SET username = $1, updated_at = NOW() WHERE id = $2 RETURNING id, username, email, role, is_active',
+            'UPDATE users SET username = $1 WHERE id = $2 RETURNING id, username, email, role, is_active, tenant_id, created_at',
             [newName.trim(), userId]
         );
         if (result.rows.length === 0) {
@@ -102,7 +102,7 @@ exports.updatePassword = async (req, res) => {
             return res.status(400).json({ error: 'Password saat ini salah' });
         }
         const hashed = await bcrypt.hash(newPassword, 10);
-        await pool.query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hashed, userId]);
+        await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashed, userId]);
         res.json({ message: 'Password berhasil diperbarui' });
     } catch (err) {
         console.error('Error updating password:', err);
@@ -141,13 +141,14 @@ exports.createUser = async (req, res) => {
     try {
         const { username, email, password, role, tenant_id, is_active } = req.body;
         const hashedPassword = await bcrypt.hash(password, 10);
-        const effectiveTenantId = tenant_id && tenant_id.trim() !== '' ? tenant_id : null;
+        const effectiveTenantId = tenant_id && tenant_id.trim() !== '' ? tenant_id.trim() : null;
         const effectiveUsername = username && username.trim() !== '' ? username.trim() : email.split('@')[0];
         const effectiveActive = is_active !== undefined ? Boolean(is_active) : true;
+        const effectiveRole = role ? role.toLowerCase() : 'operator';
 
         const result = await pool.query(
             'INSERT INTO users (username, email, password, role, tenant_id, is_active) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, username, email, role, is_active, tenant_id, created_at',
-            [effectiveUsername, email, hashedPassword, role || 'operator', effectiveTenantId, effectiveActive]
+            [effectiveUsername, email.trim(), hashedPassword, effectiveRole, effectiveTenantId, effectiveActive]
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -164,27 +165,42 @@ exports.updateUser = async (req, res) => {
     try {
         const { id } = req.params;
         const { username, email, role, tenant_id, is_active, password } = req.body;
-        const effectiveTenantId = tenant_id && tenant_id.trim() !== '' ? tenant_id : null;
         
-        let query = '';
-        let params = [];
-        
-        if (password && password.trim() !== '') {
-            const hashedPassword = await bcrypt.hash(password, 10);
-            query = 'UPDATE users SET username = COALESCE($1, username), email = COALESCE($2, email), role = COALESCE($3, role), tenant_id = $4, is_active = COALESCE($5, is_active), password = $6, updated_at = NOW() WHERE id = $7 RETURNING id, username, email, role, is_active, tenant_id, updated_at';
-            params = [username, email, role, effectiveTenantId, is_active, hashedPassword, id];
-        } else {
-            query = 'UPDATE users SET username = COALESCE($1, username), email = COALESCE($2, email), role = COALESCE($3, role), tenant_id = $4, is_active = COALESCE($5, is_active), updated_at = NOW() WHERE id = $6 RETURNING id, username, email, role, is_active, tenant_id, updated_at';
-            params = [username, email, role, effectiveTenantId, is_active, id];
-        }
-
-        const result = await pool.query(query, params);
-        if (result.rows.length === 0) {
+        // 1. Check if target user exists
+        const userCheck = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+        if (userCheck.rows.length === 0) {
             return res.status(404).json({ error: 'User tidak ditemukan' });
         }
+        const currentUser = userCheck.rows[0];
+
+        // 2. Compute updated fields
+        const newUsername = (username !== undefined && username !== null && username !== '') ? username.trim() : currentUser.username;
+        const newEmail = (email !== undefined && email !== null && email !== '') ? email.trim() : currentUser.email;
+        const newRole = (role !== undefined && role !== null && role !== '') ? role.toLowerCase() : currentUser.role;
+        const newTenantId = tenant_id !== undefined ? (tenant_id && tenant_id.trim() !== '' ? tenant_id.trim() : null) : currentUser.tenant_id;
+        const newIsActive = is_active !== undefined ? Boolean(is_active) : (currentUser.is_active !== null ? currentUser.is_active : true);
+
+        // Retain current password unless a new non-empty password is provided
+        let newPasswordHash = currentUser.password;
+        if (password && typeof password === 'string' && password.trim() !== '') {
+            newPasswordHash = await bcrypt.hash(password.trim(), 10);
+        }
+
+        // 3. Execute update without non-existent updated_at column
+        const result = await pool.query(
+            `UPDATE users 
+             SET username = $1, email = $2, role = $3, tenant_id = $4, is_active = $5, password = $6 
+             WHERE id = $7 
+             RETURNING id, username, email, role, is_active, tenant_id, created_at`,
+            [newUsername, newEmail, newRole, newTenantId, newIsActive, newPasswordHash, id]
+        );
+
         res.json(result.rows[0]);
     } catch (err) {
         console.error('Error updating user:', err);
+        if (err.code === '23505') {
+            return res.status(400).json({ error: 'Email sudah terdaftar pada akun lain' });
+        }
         res.status(500).json({ error: 'Gagal memperbarui user' });
     }
 };
