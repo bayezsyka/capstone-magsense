@@ -26,7 +26,7 @@ services:
     depends_on:
       - mosquitto
 
-  # === 3. EDGE PYTHON WORKERS (MQTT, CV, ML, LOCAL API, CLOUD SYNC, WEBRTC) ===
+  # === 3. EDGE PYTHON WORKERS (MQTT, ML, LOCAL API, CLOUD SYNC) ===
   edge-service:
     build:
       context: ./edge-pi-python
@@ -46,9 +46,7 @@ services:
       - CV_INTERVAL_SEC=10
       - PREDICT_INTERVAL_SEC=20
       - LOCAL_API_PORT=8080
-      - WEBRTC_PORT=8081
     ports:
       - "8080:8080"
-      - "8081:8081"
     depends_on:
       - mosquitto

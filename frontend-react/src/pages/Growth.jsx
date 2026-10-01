@@ -1,14 +1,19 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Camera, PlayCircle, Bug } from 'lucide-react';
-import { getAllCvResults } from '../services/api';
+import React, { useState, useRef, useEffect } from "react";
+import { Camera, PlayCircle, Bug, ShieldAlert, Video } from "lucide-react";
+import { getAllCvResults } from "../services/api";
 
 export default function Growth() {
-  const [selectedCamera, setSelectedCamera] = useState('Ruang 2');
+  const [selectedCamera, setSelectedCamera] = useState("Kamera Utama (Box 1)");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamError, setStreamError] = useState(null);
   
   const videoRef = useRef(null);
   const pcRef = useRef(null);
+
+  const isLocalEnvironment = typeof window !== "undefined" && (
+    window.location.hostname === "localhost" || 
+    window.location.hostname === "127.0.0.1"
+  );
 
   const [detectionData, setDetectionData] = useState({
     time: "-",
@@ -25,7 +30,7 @@ export default function Growth() {
       if (data && data.length > 0) {
         const latest = data[0]; 
         setDetectionData({
-          time: new Date(latest.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB',
+          time: new Date(latest.timestamp).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " WIB",
           babyLarva: latest.baby_larva || 0,
           adultLarva: latest.adult_larva || 0,
           prepupa: latest.prepupa || 0,
@@ -34,7 +39,7 @@ export default function Growth() {
         });
       }
     } catch (err) {
-      console.error("Gagal mengambil data CV:", err);
+      console.warn("Gagal mengambil data CV dari backend:", err?.message || err);
     }
   };
 
@@ -45,33 +50,34 @@ export default function Growth() {
   }, []);
 
   const startStream = async () => {
+    if (!isLocalEnvironment) {
+      setStreamError("Kamera fisik dan live stream WebRTC hanya aktif di lingkungan lokal Edge Mac (127.0.0.1:8081) untuk alasan keamanan isolasi jaringan.");
+      return;
+    }
+
     setIsStreaming(true);
     setStreamError(null);
 
-    // Inisialisasi koneksi WebRTC
     const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
     });
     pcRef.current = pc;
 
-    // Mendengarkan aliran video
     pc.ontrack = (event) => {
       if (videoRef.current && event.streams && event.streams[0]) {
         videoRef.current.srcObject = event.streams[0];
       }
     };
 
-    // Agar server merespons dengan video, setidaknya satu transciever harus berjenis recvonly (atau kita sendrecv)
-    pc.addTransceiver('video', { direction: 'recvonly' });
+    pc.addTransceiver("video", { direction: "recvonly" });
 
     try {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      // Kirim SDP Offer ke Signaling Server (Edge Pi)
-      const response = await fetch('http://localhost:8081/offer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("http://127.0.0.1:8081/offer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sdp: pc.localDescription.sdp,
           type: pc.localDescription.type
@@ -79,15 +85,15 @@ export default function Growth() {
       });
 
       if (!response.ok) {
-        throw new Error('Gagal menghubungi WebRTC Server');
+        throw new Error("Gagal menghubungi WebRTC Server Lokal (127.0.0.1:8081)");
       }
 
       const answer = await response.json();
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
     } catch (err) {
-      console.error('WebRTC Error:', err);
-      setStreamError(err.message);
+      console.error("Local WebRTC Error:", err);
+      setStreamError("Layanan WebRTC Edge belum aktif di 127.0.0.1:8081.");
       stopStream();
     }
   };
@@ -98,7 +104,6 @@ export default function Growth() {
       pcRef.current = null;
     }
     if (videoRef.current && videoRef.current.srcObject) {
-      // Stop local camera tracks if any
       videoRef.current.srcObject.getTracks().forEach(track => track.stop());
       videoRef.current.srcObject = null;
     }
@@ -106,7 +111,6 @@ export default function Growth() {
   };
 
   useEffect(() => {
-    // Cleanup saat komponen dibongkar
     return () => stopStream();
   }, []);
 
@@ -116,26 +120,38 @@ export default function Growth() {
     <div className="space-y-6">
       
       {/* HEADER CONTROLS */}
-      <div className="flex items-center gap-3 mb-6">
-        <select
-          className="px-4 py-2.5 bg-white/90 backdrop-blur-sm border border-white/50 rounded-xl outline-none font-bold text-slate-700 shadow-sm text-sm cursor-pointer transition-all duration-300 hover:shadow-md focus:ring-2 focus:ring-mag-green"
-          value={selectedCamera}
-          onChange={(e) => setSelectedCamera(e.target.value)}
-        >
-          <option>Ruang 1</option>
-          <option>Ruang 2</option>
-          <option>Ruang 3</option>
-        </select>
-        <button
-          onClick={isStreaming ? stopStream : startStream}
-          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold transition-all duration-300 shadow-sm hover:shadow-md text-sm hover:-translate-y-0.5 ${isStreaming
-              ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-100'
-              : 'bg-gradient-to-r from-mag-green to-emerald-400 text-white shadow-glow hover:shadow-lg'
-            }`}
-        >
-          <PlayCircle size={18} />
-          {isStreaming ? 'Hentikan Siaran' : 'Buka Siaran Langsung'}
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <select
+            className="px-4 py-2.5 bg-white/90 backdrop-blur-sm border border-white/50 rounded-xl outline-none font-bold text-slate-700 shadow-sm text-sm cursor-pointer transition-all duration-300 hover:shadow-md focus:ring-2 focus:ring-mag-green"
+            value={selectedCamera}
+            onChange={(e) => setSelectedCamera(e.target.value)}
+          >
+            <option>Kamera Utama (Box 1)</option>
+          </select>
+          
+          {isLocalEnvironment ? (
+            <button
+              onClick={isStreaming ? stopStream : startStream}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold transition-all duration-300 shadow-sm hover:shadow-md text-sm hover:-translate-y-0.5 ${isStreaming
+                  ? "bg-red-50 text-red-600 hover:bg-red-100 border border-red-100"
+                  : "bg-gradient-to-r from-mag-green to-emerald-400 text-white shadow-glow hover:shadow-lg"
+                }`}
+            >
+              <PlayCircle size={18} />
+              {isStreaming ? "Hentikan Siaran" : "Buka Siaran Langsung Edge"}
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 text-xs font-bold">
+              <Video size={16} className="text-slate-400" />
+              <span>Live Stream Kamera: Mode Edge Lokal</span>
+            </div>
+          )}
+        </div>
+
+        <div className="text-xs font-bold text-slate-500 bg-slate-100/80 px-3 py-1.5 rounded-xl border border-slate-200">
+          Environment: <span className={isLocalEnvironment ? "text-mag-green font-black" : "text-blue-600 font-black"}>{isLocalEnvironment ? "LOCAL DEV (Mac)" : "PUBLIC PRODUCTION"}</span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -147,14 +163,23 @@ export default function Growth() {
             ref={videoRef} 
             autoPlay 
             playsInline 
-            className={`w-full h-full object-cover absolute inset-0 z-10 ${!isStreaming || streamError ? 'hidden' : 'block'}`}
+            className={`w-full h-full object-cover absolute inset-0 z-10 ${!isStreaming || streamError ? "hidden" : "block"}`}
           />
           
           {(!isStreaming || streamError) && (
-            <div className="flex flex-col items-center z-0">
-              <Camera size={48} className={`mb-4 ${streamError ? 'text-red-500' : 'opacity-50'}`} />
-              <p className={`text-sm font-medium ${streamError ? 'text-red-400' : ''}`}>
-                {streamError ? `Error: ${streamError}` : 'Live stream tidak aktif'}
+            <div className="flex flex-col items-center text-center p-6 z-0 max-w-md">
+              <Camera size={44} className={`mb-3 ${streamError ? "text-red-400" : "text-slate-600"}`} />
+              <p className="text-sm font-bold text-slate-300 mb-1">
+                {isLocalEnvironment 
+                  ? (streamError ? streamError : "Siaran Langsung Kamera Belum Aktif")
+                  : "Live Stream Kamera Diisolasi di Edge Mac"
+                }
+              </p>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {isLocalEnvironment
+                  ? "Klik Buka Siaran Langsung Edge untuk menghubungkan WebRTC native ke kamera fisik Mac dan inferensi YOLOv8."
+                  : "Untuk privasi dan keamanan infrastruktur, streaming kamera fisik hanya dibuka pada antarmuka lokal Mac (127.0.0.1:8081). Hasil deteksi numerik tetap disinkronkan secara aman ke Central API."
+                }
               </p>
             </div>
           )}
@@ -162,7 +187,7 @@ export default function Growth() {
 
         {/* SIDEBAR METRICS */}
         <div className="bg-white/90 backdrop-blur-sm p-8 rounded-3xl shadow-soft border border-white/50 flex flex-col transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
-          <h3 className="text-base font-black text-slate-800 mb-4">Output Numerik</h3>
+          <h3 className="text-base font-black text-slate-800 mb-4">Output Numerik CV</h3>
 
           <div className="space-y-3 border-b border-slate-100 pb-4 mb-4">
             <div className="flex justify-between items-center text-xs">
@@ -175,7 +200,7 @@ export default function Growth() {
             </div>
             <div className="flex justify-between items-center text-xs">
               <span className="text-slate-500 font-medium tracking-wider">SUMBER DATA</span>
-              <span className="text-slate-700 font-bold">Siaran Langsung Kamera</span>
+              <span className="text-slate-700 font-bold">{isLocalEnvironment && isStreaming ? "Kamera Fisik Edge (127.0.0.1)" : "Central API (Sync SQLite)"}</span>
             </div>
           </div>
 
@@ -186,14 +211,14 @@ export default function Growth() {
             </div>
             <div className="bg-gradient-to-br from-emerald-50 to-green-100/50 rounded-2xl p-4 border border-emerald-100/50 flex flex-col justify-center shadow-inner">
               <span className="text-[10px] text-mag-green font-bold mb-1 tracking-wider uppercase">DOMINAN</span>
-              <span className="text-xl font-black text-slate-800 capitalize">{detectionData.dominant.toLowerCase() === '-' ? 'Tidak Ada' : detectionData.dominant}</span>
+              <span className="text-xl font-black text-slate-800 capitalize">{detectionData.dominant.toLowerCase() === "-" ? "Tidak Ada" : detectionData.dominant}</span>
             </div>
           </div>
 
           <div className="mb-4 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 shadow-sm">
             <h4 className="text-mag-green text-xs font-bold mb-2 tracking-wider">REKOMENDASI</h4>
             <ul className="text-[11px] text-slate-600 space-y-1.5 list-disc pl-4 marker:text-mag-green font-medium">
-              <li>Populasi didominasi {detectionData.dominant.toLowerCase() !== '-' ? detectionData.dominant.toLowerCase() : 'fase belum diketahui'}.</li>
+              <li>Populasi didominasi {detectionData.dominant.toLowerCase() !== "-" ? detectionData.dominant.toLowerCase() : "fase belum diketahui"}.</li>
               <li>Pindahkan ke kandang reproduksi/perkawinan.</li>
               <li>Hentikan intervensi pakan sepenuhnya.</li>
               <li>Pantau untuk estimasi waktu kemunculan lalat dewasa demi siklus produksi berikutnya.</li>
@@ -202,10 +227,10 @@ export default function Growth() {
 
           <div className="grid grid-cols-4 gap-2 mb-4">
             {[
-              { label: 'BAYI', value: detectionData.babyLarva },
-              { label: 'DEWASA', value: detectionData.adultLarva },
-              { label: 'PREPUPA', value: detectionData.prepupa },
-              { label: 'PUPA', value: detectionData.pupa }
+              { label: "BAYI", value: detectionData.babyLarva },
+              { label: "DEWASA", value: detectionData.adultLarva },
+              { label: "PREPUPA", value: detectionData.prepupa },
+              { label: "PUPA", value: detectionData.pupa }
             ].map((item) => {
               const percentage = totalObjects === 0 ? 0 : ((item.value / totalObjects) * 100).toFixed(0);
               return (
