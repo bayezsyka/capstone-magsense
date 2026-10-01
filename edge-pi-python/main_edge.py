@@ -12,7 +12,8 @@ WORKERS = [
     "cv_worker.py",
     "ml_worker.py",
     "local_api.py",
-    "cloud_sync.py"
+    "cloud_sync.py",
+    "webrtc_server.py"
 ]
 
 processes = {}
