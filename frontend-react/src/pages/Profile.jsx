@@ -1,27 +1,29 @@
 // src/pages/Profile.jsx
 import { useState, useRef, useEffect } from 'react';
-import axios from 'axios';
-import config from '../config';
+import { getProfile, updateProfile, updatePassword } from '../services/api';
 import { User, Camera, Lock, KeyRound, Save, AlertCircle, CheckCircle2 } from 'lucide-react';
-
-const API_BASE = config.API_URL;
 
 export default function Profile() {
   const fileInputRef = useRef(null);
 
-  // Data user awal (Mock State)
+  // Data user awal
   const [profile, setProfile] = useState({
-    name: 'Pembudidaya',
-    email: 'admin@maggott.com',
-    avatar: null, // Berisi URL objek gambar saat di-upload
+    name: '',
+    email: '',
+    avatar: null,
   });
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    axios.get(`${API_BASE}/api/profile`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => setProfile({ ...profile, name: res.data.username, email: res.data.email }))
+    getProfile()
+      .then(data => {
+        if (data) {
+          setProfile(prev => ({
+            ...prev,
+            name: data.username || data.name || '',
+            email: data.email || ''
+          }));
+        }
+      })
       .catch(err => console.error("Profile Fetch Error:", err));
   }, []);
 
@@ -69,21 +71,18 @@ export default function Profile() {
     setTimeout(() => setStatus({ type: '', message: '' }), 4000);
   };
 
-  // Submit Perubahan Profil (Nama & Email)
+  // Submit Perubahan Profil (Nama)
   const handleSaveProfile = async (e) => {
     e.preventDefault();
     if (!profile.name.trim()) {
       showNotification('error', 'Nama pengguna tidak boleh kosong');
       return;
     }
-    const token = localStorage.getItem("token");
     try {
-      await axios.put(`${API_BASE}/api/profile`, { name: profile.name }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await updateProfile({ name: profile.name });
       showNotification('success', 'Informasi profil Anda berhasil diperbarui!');
     } catch (err) {
-      showNotification('error', 'Gagal memperbarui profil');
+      showNotification('error', err.error || err.message || 'Gagal memperbarui profil');
     }
   };
 
@@ -105,15 +104,12 @@ export default function Profile() {
       return;
     }
 
-    const token = localStorage.getItem("token");
     try {
-      await axios.put(`${API_BASE}/api/profile/password`, { currentPassword, newPassword }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await updatePassword({ currentPassword, newPassword });
       showNotification('success', 'Kata sandi Anda sukses diperbarui!');
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err) {
-      showNotification('error', err.response?.data?.message || 'Gagal memperbarui kata sandi');
+      showNotification('error', err.error || err.message || 'Gagal memperbarui kata sandi');
     }
   };
 

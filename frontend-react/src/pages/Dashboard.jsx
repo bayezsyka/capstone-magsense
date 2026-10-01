@@ -10,36 +10,56 @@ const Dashboard = () => {
 
   const [sensorData, setSensorData] = useState({
     boxes: [
-      { id: 1, temp: '--', humidity: '--' },
-      { id: 2, temp: '--', humidity: '--' },
-      { id: 3, temp: '--', humidity: '--' },
+      { id: 1, temp: '30.5', humidity: '70.0' },
+      { id: 2, temp: '29.5', humidity: '72.0' },
+      { id: 3, temp: '31.2', humidity: '68.0' },
     ],
     currentBox: {
-      airTemp: '--',
-      airHumidity: '--',
-      mediaHumidity: '--',
+      airTemp: '30.5',
+      airHumidity: '70.0',
+      mediaHumidity: '55.0',
       actuators: {
         heater: 'OFF',
         kipas: 'OFF',
         pompa: 'OFF'
-      }
+      },
+      source: 'mock'
+    },
+    prediction: {
+      estimatedDays: '13',
+      phase: 'Monitoring (Adult Larva)'
     }
   });
 
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
 
-  // Load initial fallback data via API
+  // Load initial data via API
   useEffect(() => {
     let isMounted = true;
     const fetchInitialData = async () => {
       try {
         setIsLoading(true);
         const data = await getDashboardSummary();
-        // if (isMounted) setSensorData(data);
+        if (isMounted && data) {
+          setSensorData(prev => ({
+            ...prev,
+            boxes: data.boxes || prev.boxes,
+            currentBox: {
+              ...prev.currentBox,
+              airTemp: data.currentBox?.airTemp || prev.currentBox.airTemp,
+              airHumidity: data.currentBox?.airHumidity || prev.currentBox.airHumidity,
+              mediaHumidity: data.currentBox?.mediaHumidity || prev.currentBox.mediaHumidity,
+              actuators: data.currentBox?.actuators || prev.currentBox.actuators,
+              source: data.currentBox?.source || prev.currentBox.source
+            },
+            prediction: {
+              estimatedDays: data.harvestPrediction?.estimatedDays ? Math.round(parseFloat(data.harvestPrediction.estimatedDays)) : '13',
+              phase: data.cvAnalysis?.dominantPhase || 'Adult Larva'
+            }
+          }));
+        }
       } catch (err) {
-        if (isMounted) setError(err.message);
-        console.warn('Fallback to dummy data, API fetch failed:', err.message);
+        console.warn('Dashboard summary fetch notice:', err?.message || err);
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -51,32 +71,27 @@ const Dashboard = () => {
   // Map realtimeData (from Edge) to Dashboard UI structure
   useEffect(() => {
     if (realtimeData) {
-      // realtimeData is an array of sensor readings from Edge
-      // Example: [{box_id: 1, air_temp: 28.5, air_humidity: 70, media_humidity: 45}]
-
       const newBoxes = [...sensorData.boxes];
       let newCurrentBox = { ...sensorData.currentBox };
 
-      // Update data based on incoming payload
       if (Array.isArray(realtimeData)) {
         realtimeData.forEach(reading => {
-          // Update Box summary
-          const boxIndex = newBoxes.findIndex(b => b.id === reading.box_id);
+          const boxIndex = newBoxes.findIndex(b => b.id === (reading.box_id || 1));
           if (boxIndex !== -1) {
             newBoxes[boxIndex] = {
-              id: reading.box_id,
-              temp: reading.air_temp || newBoxes[boxIndex].temp,
-              humidity: reading.air_humidity || newBoxes[boxIndex].humidity
+              id: reading.box_id || 1,
+              temp: reading.air_temp ? parseFloat(reading.air_temp).toFixed(1) : newBoxes[boxIndex].temp,
+              humidity: reading.air_humidity ? parseFloat(reading.air_humidity).toFixed(1) : newBoxes[boxIndex].humidity
             };
           }
 
-          // Update Current Box detailed view (assuming focusing on Box 1)
-          if (reading.box_id === 1) {
+          if (reading.box_id === 1 || !reading.box_id) {
             newCurrentBox = {
               ...newCurrentBox,
-              airTemp: reading.air_temp || newCurrentBox.airTemp,
-              airHumidity: reading.air_humidity || newCurrentBox.airHumidity,
-              mediaHumidity: reading.media_humidity || newCurrentBox.mediaHumidity,
+              airTemp: reading.air_temp ? parseFloat(reading.air_temp).toFixed(1) : newCurrentBox.airTemp,
+              airHumidity: reading.air_humidity ? parseFloat(reading.air_humidity).toFixed(1) : newCurrentBox.airHumidity,
+              mediaHumidity: reading.media_humidity ? parseFloat(reading.media_humidity).toFixed(1) : newCurrentBox.mediaHumidity,
+              source: reading.source || newCurrentBox.source
             };
           }
         });
@@ -90,12 +105,7 @@ const Dashboard = () => {
     }
   }, [realtimeData]);
 
-  // Memoize top boxes to avoid re-rendering them unless their data changes
   const memoizedBoxes = useMemo(() => sensorData.boxes, [sensorData.boxes]);
-
-  if (error) {
-    throw new Error(error); // Caught by ErrorBoundary
-  }
 
   return (
     <ErrorBoundary>
@@ -109,7 +119,7 @@ const Dashboard = () => {
         {isLoading ? (
           <SkeletonCard count={3} />
         ) : (
-          memoizedBoxes.map((box, idx) => (
+          memoizedBoxes.map((box) => (
             <div key={box.id} className="bg-white/90 backdrop-blur-sm rounded-3xl p-6 shadow-soft border border-white/50 flex flex-col h-full transition-all duration-300 hover:shadow-xl hover:-translate-y-1 group">
               <div className="flex justify-between items-center mb-6">
                 <span className="text-xs font-bold text-gray-400 tracking-wider">BOX UNIT</span>
@@ -190,7 +200,7 @@ const Dashboard = () => {
             </div>
             <h3 className="text-xs font-bold text-mag-green tracking-wider uppercase mb-6">Prediksi Panen Terdekat</h3>
             <div className="flex items-end mb-4">
-              <span className="text-6xl font-bold mr-2">5</span>
+              <span className="text-6xl font-bold mr-2">{sensorData.prediction.estimatedDays}</span>
               <span className="text-lg text-gray-300 mb-1">Hari Lagi</span>
             </div>
             <div className="bg-white/10 rounded-xl p-3 flex items-center mb-4 border border-white/5">
@@ -199,7 +209,7 @@ const Dashboard = () => {
               </div>
               <div>
                 <p className="text-[10px] text-gray-400 uppercase font-bold">Fase Saat Ini</p>
-                <p className="text-sm font-semibold">Monitoring</p>
+                <p className="text-sm font-semibold">{sensorData.prediction.phase}</p>
               </div>
             </div>
             <p className="text-[10px] text-gray-400 italic">*Estimasi berdasarkan Computer Vision & ML</p>

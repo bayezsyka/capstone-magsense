@@ -1,15 +1,76 @@
+# === DEPENDENCIES ===
 node_modules/
-.env
-.env.*
-!.env.example
-__pycache__/
-*.pyc
-*.pyo
 venv/
 env/
 .venv/
-.DS_Store
+
+# === BUILD OUTPUTS ===
 dist/
 build/
 coverage/
+
+# === ENVIRONMENT / SECRETS ===
+.env
+.env.*
+!.env.example
+
+# === PYTHON CACHE ===
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# === RUNTIME DATABASES ===
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+edge-pi-python/edge_local.db
+
+# === LOG FILES ===
 *.log
+*.log.*
+logs/
+
+# === DOCKER RUNTIME ===
+pgdata/
+docker-volumes/
+mosquitto/data/
+mosquitto/log/
+
+# === OS ===
+.DS_Store
+.DS_Store?
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# === IDE ===
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# === CLOUDFLARE / SSH / CERTS ===
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+cloudflare-*.json
+.cloudflare/
+known_hosts
+
+# === BEST.PT / ML ARTIFACTS ===
+# Keep best.pt if <25MB and committed intentionally.
+# Uncomment below to exclude:
+# best.pt
+# *.pt
+# *.pth
+# *.pkl
+# xgb_model.*
+
+# === MISC ===
+*.tmp
+*.bak

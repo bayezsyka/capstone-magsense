@@ -3,84 +3,84 @@ import sqlite3
 import json
 import logging
 import time
-
-# Logging configuration
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 import os
-MQTT_BROKER = os.environ.get("MQTT_BROKER", "localhost") # Assuming Mosquitto is running locally on Pi
-MQTT_PORT = 1883
-MQTT_TOPIC_SENSOR = "maggot/sensor/data"
-DB_FILE = "edge_local.db"
+from datetime import datetime
+from local_db import init_db, get_db_connection
 
-def save_sensor_data(data):
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - [MQTT WORKER] - %(message)s")
+
+MQTT_BROKER = os.environ.get("MQTT_BROKER", "localhost")
+MQTT_PORT = int(os.environ.get("MQTT_PORT", 1883))
+MQTT_TOPIC_SENSOR = os.environ.get("MQTT_TOPIC_SENSOR", "maggot/sensor/data")
+DB_FILE = os.environ.get("SQLITE_DB_PATH", "edge_local.db")
+
+def save_payload_to_db(data):
     try:
         box_id = data.get("box_id", 1)
-        temp = data.get("temperature", 0.0)
-        hum = data.get("humidity", 0.0)
+        temp = data.get("temperature", data.get("air_temp", 0.0))
+        hum = data.get("humidity", data.get("air_humidity", 0.0))
         media_hum = data.get("media_humidity", 0.0)
+        raw_adc = data.get("raw_soil_adc", 0)
+        source = data.get("source", "real")
+        ts = data.get("timestamp", datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
 
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO sensor_data (box_id, temperature, humidity, media_humidity)
-            VALUES (?, ?, ?, ?)
-        ''', (box_id, temp, hum, media_hum))
+
+        # 1. Insert sensor readings
+        cursor.execute("""
+            INSERT INTO sensor_data (box_id, temperature, humidity, media_humidity, raw_soil_adc, source, timestamp, synced)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+        """, (box_id, temp, hum, media_hum, raw_adc, source, ts))
+
+        # 2. Insert actuator states if present
+        actuators = data.get("actuators", {})
+        for act_type, act_status in actuators.items():
+            cursor.execute("""
+                INSERT INTO actuator_logs (box_id, actuator_type, status, source, timestamp, synced)
+                VALUES (?, ?, ?, ?, ?, 0)
+            """, (box_id, act_type, act_status, source, ts))
+
         conn.commit()
         conn.close()
-        logging.info(f"Saved sensor data for Box {box_id}: Temp={temp}, Hum={hum}, MediaHum={media_hum}")
-    except sqlite3.Error as e:
-        logging.error(f"Database error while saving sensor data: {e}")
+        logging.info(f"Saved IoT data Box {box_id}: T={temp}°C, RH={hum}%, Media={media_hum}%, Actuators={actuators}")
     except Exception as e:
-        logging.error(f"Unexpected error while saving sensor data: {e}")
+        logging.error(f"Error saving IoT payload to SQLite: {e}")
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         logging.info(f"Connected to MQTT Broker at {MQTT_BROKER}:{MQTT_PORT}")
         client.subscribe(MQTT_TOPIC_SENSOR)
+        client.subscribe("maggot/sensor/#")
         logging.info(f"Subscribed to topic: {MQTT_TOPIC_SENSOR}")
     else:
-        logging.error(f"Failed to connect, return code {rc}")
+        logging.error(f"Failed to connect to MQTT broker, return code: {rc}")
 
 def on_message(client, userdata, msg):
     try:
-        payload = msg.payload.decode('utf-8')
-        logging.debug(f"Received message on {msg.topic}: {payload}")
-        data = json.loads(payload)
-        save_sensor_data(data)
-    except json.JSONDecodeError:
-        logging.error("Failed to decode JSON payload")
+        payload_str = msg.payload.decode("utf-8")
+        data = json.loads(payload_str)
+        save_payload_to_db(data)
     except Exception as e:
-        logging.error(f"Error processing message: {e}")
-
-def on_disconnect(client, userdata, rc):
-    logging.warning(f"Disconnected from MQTT Broker with return code {rc}")
-    if rc != 0:
-        logging.info("Unexpected disconnection. Auto-reconnecting...")
+        logging.error(f"Failed to process MQTT message from {msg.topic}: {e}")
 
 def start_mqtt_worker():
-    client = mqtt.Client(client_id="Pi_Edge_MQTT_Worker")
+    init_db()
+    client = mqtt.Client(client_id="Edge_Local_MQTT_Worker")
     client.on_connect = on_connect
     client.on_message = on_message
-    client.on_disconnect = on_disconnect
-    
-    # Configure auto-reconnect delays (min 1s, max 60s)
-    client.reconnect_delay_set(min_delay=1, max_delay=60)
+    client.reconnect_delay_set(min_delay=1, max_delay=30)
 
     connected = False
     while not connected:
         try:
             client.connect(MQTT_BROKER, MQTT_PORT, 60)
             connected = True
-        except ConnectionRefusedError:
-            logging.warning("Connection refused by broker. Retrying in 5 seconds...")
-            time.sleep(5)
         except Exception as e:
-            logging.error(f"Connection error: {e}. Retrying in 5 seconds...")
-            time.sleep(5)
+            logging.warning(f"Connection to MQTT failed: {e}. Retrying in 4 seconds...")
+            time.sleep(4)
 
     client.loop_forever()
 
 if __name__ == "__main__":
-    logging.info("Starting MQTT Worker...")
     start_mqtt_worker()

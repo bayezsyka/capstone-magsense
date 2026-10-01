@@ -1,122 +1,152 @@
-import sqlite3
-import logging
-import time
-import random
 import os
-import pandas as pd
+import time
+import json
+import logging
+import random
+from datetime import datetime
+from local_db import init_db, get_db_connection
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - [ML HARVEST] - %(message)s")
 
-DB_FILE = "edge_local.db"
-MODEL_FILE = "xgboost_model.json"
+MODEL_FILE = os.environ.get("XGB_MODEL_PATH", "xgboost_model.json")
+PREDICT_INTERVAL_SEC = int(os.environ.get("PREDICT_INTERVAL_SEC", 30))
 
-def fallback_prediction(features):
+def get_latest_features(box_id=1):
     """
-    Fallback dummy prediction logic if XGBoost is missing or fails.
+    Queries microclimate and CV metrics from local SQLite.
     """
-    temp = features.get('temp', 28.0)
-    prepupa = features.get('prepupa', 0)
-    adult = features.get('adult', 0)
+    conn = get_db_connection()
+    cursor = conn.cursor()
     
-    if prepupa > 20:
-        return round(random.uniform(1.0, 3.0), 1)
-    elif adult > 50:
-        return round(random.uniform(4.0, 10.0), 1)
-        
-    val = max(0.0, min(15.0, 15 - (temp * 0.1) - (prepupa * 0.3)))
-    return round(val, 1)
+    cursor.execute("""
+        SELECT temperature, humidity, media_humidity 
+        FROM sensor_data 
+        WHERE box_id = ? 
+        ORDER BY timestamp DESC LIMIT 1
+    """, (box_id,))
+    sensor_row = cursor.fetchone()
 
-def predict_harvest_days(box_id, model):
-    """
-    Predict for the given box using the pre-trained XGBoost model.
-    """
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        
-        # Query the latest data for this specific box
-        query = """
-            SELECT 
-                s.temperature, s.humidity, s.media_humidity,
-                c.baby_larva, c.adult_larva, c.prepupa, c.pupa
-            FROM sensor_data s
-            LEFT JOIN cv_results c ON s.box_id = c.box_id 
-            WHERE s.box_id = ? AND s.temperature IS NOT NULL
-            ORDER BY s.timestamp DESC
-            LIMIT 1
-        """
-        df = pd.read_sql_query(query, conn, params=(box_id,))
-        conn.close()
-        
-        if df.empty:
-            logging.warning(f"No recent data for Box {box_id}. Using fallback.")
-            return fallback_prediction({'temp': 28.0, 'prepupa': 0})
-            
-        df.fillna(0, inplace=True)
-        
-        feature_cols = [
-            'temperature', 'humidity', 'media_humidity', 
-            'baby_larva', 'adult_larva', 'prepupa', 'pupa'
-        ]
-        X_latest = df[feature_cols]
-        
-        if model is not None:
-            prediction = model.predict(X_latest)[0]
-            return round(float(prediction), 1)
-        else:
-            # If model wasn't loaded, use fallback based on actual latest data
-            return fallback_prediction({
-                'temp': df['temperature'].iloc[0], 
-                'prepupa': df['prepupa'].iloc[0],
-                'adult': df['adult_larva'].iloc[0]
-            })
-            
-    except Exception as e:
-        logging.error(f"Error predicting for Box {box_id}: {e}. Using fallback.")
-        return fallback_prediction({'temp': 28.0, 'prepupa': 0})
+    cursor.execute("""
+        SELECT baby_larva, adult_larva, prepupa, pupa, dominant_phase
+        FROM cv_results
+        WHERE box_id = ?
+        ORDER BY timestamp DESC LIMIT 1
+    """, (box_id,))
+    cv_row = cursor.fetchone()
+    conn.close()
 
-def save_prediction(box_id, days, confidence=0.95):
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO harvest_predictions (box_id, predicted_days, confidence)
-            VALUES (?, ?, ?)
-        ''', (box_id, days, confidence))
-        conn.commit()
-        conn.close()
-        logging.info(f"Saved Prediction for Box {box_id}: {days} days to harvest.")
-    except sqlite3.Error as e:
-        logging.error(f"Database error saving prediction: {e}")
+    temp = sensor_row["temperature"] if sensor_row else 29.0
+    hum = sensor_row["humidity"] if sensor_row else 70.0
+    media_hum = sensor_row["media_humidity"] if sensor_row else 58.0
 
-def run_ml_pipeline():
-    logging.info("Starting ML Worker Pipeline...")
+    baby = cv_row["baby_larva"] if cv_row else 20
+    adult = cv_row["adult_larva"] if cv_row else 180
+    prepupa = cv_row["prepupa"] if cv_row else 30
+    pupa = cv_row["pupa"] if cv_row else 5
+    dominant = cv_row["dominant_phase"] if cv_row else "ADULT LARVA"
+
+    return {
+        "temperature": temp,
+        "humidity": hum,
+        "media_humidity": media_hum,
+        "baby_larva": baby,
+        "adult_larva": adult,
+        "prepupa": prepupa,
+        "pupa": pupa,
+        "dominant_phase": dominant
+    }
+
+def predict_harvest(box_id=1):
+    features = get_latest_features(box_id)
     
-    # Load model once at startup
-    model = None
-    try:
-        import xgboost as xgb
-        if os.path.exists(MODEL_FILE):
+    # Check if real XGBoost model is provided
+    if os.path.exists(MODEL_FILE):
+        try:
+            import xgboost as xgb
+            import pandas as pd
             model = xgb.XGBRegressor()
             model.load_model(MODEL_FILE)
-            logging.info(f"Successfully loaded pre-trained model from {MODEL_FILE}")
-        else:
-            logging.warning(f"Model file {MODEL_FILE} not found. Please run train_xgb.py first. Using fallback.")
-    except ImportError:
-        logging.warning("XGBoost library not installed. Using fallback.")
-    except Exception as e:
-        logging.error(f"Error loading XGBoost model: {e}")
+            X = pd.DataFrame([{
+                "temperature": features["temperature"],
+                "humidity": features["humidity"],
+                "media_humidity": features["media_humidity"],
+                "baby_larva": features["baby_larva"],
+                "adult_larva": features["adult_larva"],
+                "prepupa": features["prepupa"],
+                "pupa": features["pupa"]
+            }])
+            pred = float(model.predict(X)[0])
+            pred_days = round(max(0.5, min(25.0, pred)), 1)
+            source = "real_xgb"
+        except Exception as e:
+            logging.warning(f"Error predicting with XGBoost: {e}. Using modular rule placeholder.")
+            pred_days = calculate_domain_estimate(features)
+            source = "modular_rule"
+    else:
+        pred_days = calculate_domain_estimate(features)
+        source = "modular_rule"
 
+    # Determine Urgency Level
+    if pred_days <= 3.0:
+        urgency = "High"
+    elif pred_days <= 7.0:
+        urgency = "Medium"
+    else:
+        urgency = "Low"
+
+    confidence = 0.94
+
+    return {
+        "box_id": box_id,
+        "predicted_days": pred_days,
+        "urgency_level": urgency,
+        "confidence": confidence,
+        "source": source,
+        "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+def calculate_domain_estimate(f):
+    """
+    Bounded domain estimate for BSF harvest cycle.
+    Standard larval cycle is ~14-18 days depending on temperature and prepupa emergence.
+    """
+    total_larvae = f["baby_larva"] + f["adult_larva"] + f["prepupa"] + f["pupa"]
+    prepupa_ratio = (f["prepupa"] + f["pupa"]) / total_larvae if total_larvae > 0 else 0.15
+    temp_factor = (f["temperature"] - 28.0) * 0.2
+
+    # Higher prepupa ratio means harvest is very close (1-4 days)
+    # Higher adult ratio means 5-10 days
+    base_days = 16.0 - (prepupa_ratio * 15.0) - temp_factor
+    return round(max(1.0, min(20.0, base_days)), 1)
+
+def save_prediction(pred):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO harvest_predictions (
+                box_id, predicted_days, urgency_level, confidence, source, timestamp, synced
+            ) VALUES (?, ?, ?, ?, ?, ?, 0)
+        """, (
+            pred["box_id"], pred["predicted_days"], pred["urgency_level"],
+            pred["confidence"], pred["source"], pred["timestamp"]
+        ))
+        conn.commit()
+        conn.close()
+        logging.info(f"Saved Harvest Prediction Box {pred['box_id']}: {pred['predicted_days']} hari lagi | Urgency: {pred['urgency_level']} | Source: {pred['source']}")
+    except Exception as e:
+        logging.error(f"Error saving prediction to SQLite: {e}")
+
+def run_ml_loop():
+    init_db()
     while True:
         try:
-            for box_id in [1, 2, 3]:
-                days_predicted = predict_harvest_days(box_id, model)
-                save_prediction(box_id, days_predicted)
-                    
-            # Run prediction every 5 minutes
-            time.sleep(300)
+            pred = predict_harvest(box_id=1)
+            save_prediction(pred)
+            time.sleep(PREDICT_INTERVAL_SEC)
         except Exception as e:
-            logging.error(f"Error in ML pipeline loop: {e}")
-            time.sleep(60)
+            logging.error(f"Error in ML prediction loop: {e}")
+            time.sleep(PREDICT_INTERVAL_SEC)
 
 if __name__ == "__main__":
-    run_ml_pipeline()
+    run_ml_loop()

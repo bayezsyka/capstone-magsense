@@ -2,7 +2,7 @@ const pool = require('../db');
 
 exports.getAllCvResults = async (req, res) => {
     try {
-        const { rows } = await pool.query('SELECT id, box_id, dominant_phase, confidence_score, detection_counts, timestamp FROM cv_results ORDER BY timestamp DESC LIMIT 100');
+        const { rows } = await pool.query('SELECT id, box_id, dominant_phase, confidence_score, detection_counts, source, timestamp FROM cv_results ORDER BY timestamp DESC LIMIT 100');
         res.json(rows);
     } catch (err) {
         console.error(err);

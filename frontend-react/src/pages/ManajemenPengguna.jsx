@@ -78,10 +78,10 @@ export default function ManajemenPengguna() {
     const formData = new FormData(e.target);
     const payload = Object.fromEntries(formData.entries());
     
-    // Convert is_active string to boolean
-    if (payload.is_active) {
-       payload.is_active = payload.is_active === 'true';
-    }
+    // Explicit boolean for is_active from checkbox presence
+    payload.is_active = formData.has('is_active');
+    if (payload.tenant_id === '') delete payload.tenant_id;
+    if (payload.password === '') delete payload.password;
 
     try {
       if (activeTab === 'users') {
@@ -243,7 +243,8 @@ export default function ManajemenPengguna() {
                   <div className="space-y-1">
                     <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Role*</label>
                     <select name="role" required defaultValue={modal.data?.role} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold">
-                      <option value="pembudidaya">Pembudidaya / Operator</option>
+                      <option value="pembudidaya">Pembudidaya</option>
+                      <option value="operator">Operator</option>
                       <option value="admin">Admin</option>
                     </select>
                   </div>
