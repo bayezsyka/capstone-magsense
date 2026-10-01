@@ -9,11 +9,11 @@ from aiohttp import web
 from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from av import VideoFrame
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - [WEBRTC SERVER] - %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - [WEBRTC NATIVE] - %(message)s")
 
 # Load YOLO model
 model = None
-MODEL_PATH = os.environ.get("YOLO_MODEL_PATH", "best.pt")
+MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "best.pt")
 try:
     if os.path.exists(MODEL_PATH):
         from ultralytics import YOLO
@@ -30,29 +30,25 @@ cors_headers = {
     "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With"
 }
 
-class CVVideoStreamTrack(VideoStreamTrack):
+class CameraVideoStreamTrack(VideoStreamTrack):
     """
-    Video stream track reading from camera, video file, or synthetic frames,
-    running YOLOv8 object detection in realtime and returning annotated frames.
+    Native video stream track accessing physical Mac camera (AVFoundation via cv2.VideoCapture(0)).
+    Runs realtime YOLOv8 inference and returns annotated VideoFrame to WebRTC.
     """
-    def __init__(self, source=None):
+    def __init__(self, camera_index=0):
         super().__init__()
-        self.source_str = source or os.environ.get("CAMERA_SOURCE", "0")
+        self.camera_index = camera_index
+        logging.info(f"Opening physical macOS camera index {self.camera_index}...")
+        self.cap = cv2.VideoCapture(self.camera_index)
         
-        # Check if source is integer camera index or filepath
-        if self.source_str.isdigit():
-            self.source = int(self.source_str)
-        else:
-            self.source = self.source_str
+        # Configure standard resolution
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-        self.cap = cv2.VideoCapture(self.source)
-        self.is_video_file = isinstance(self.source, str) and os.path.exists(self.source)
-        
         if not self.cap.isOpened():
-            logging.warning(f"VideoCapture could not open {self.source}. Will use synthetic animated pattern.")
-            self.cap = None
+            logging.warning(f"Native camera index {self.camera_index} could not be opened directly.")
         else:
-            logging.info(f"VideoCapture successfully opened source: {self.source}")
+            logging.info(f"Native camera index {self.camera_index} successfully opened.")
 
         self.frame_count = 0
         self.start_time = time.time()
@@ -64,37 +60,15 @@ class CVVideoStreamTrack(VideoStreamTrack):
         frame = None
         if self.cap is not None and self.cap.isOpened():
             ret, read_frame = self.cap.read()
-            if ret:
+            if ret and read_frame is not None:
                 frame = read_frame
-            elif self.is_video_file:
-                # Loop video file
-                self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                ret, read_frame = self.cap.read()
-                if ret:
-                    frame = read_frame
 
         if frame is None:
-            # Generate animated synthetic maggot culture visualizer
+            # Fallback if camera stream interrupted
             frame = np.zeros((480, 640, 3), dtype=np.uint8)
-            frame[:] = (30, 35, 40) # Dark organic background
-            
-            t = time.time()
-            # Draw synthetic container and animated maggot clusters
-            cv2.rectangle(frame, (40, 40), (600, 440), (45, 55, 60), -1)
-            cv2.rectangle(frame, (40, 40), (600, 440), (80, 95, 100), 2)
-            
-            # Simulated larvae moving in organic patterns
-            for i in range(25):
-                angle = t * 0.8 + i * 0.5
-                radius = 80 + (i * 7) % 110
-                cx = int(320 + radius * np.cos(angle))
-                cy = int(240 + (radius * 0.7) * np.sin(angle))
-                cv2.ellipse(frame, (cx, cy), (12, 5), int(np.degrees(angle)), 0, 360, (180, 200, 190), -1)
-            
-            cv2.putText(frame, "MAG-SENSE EDGE CV STREAM", (60, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (16, 185, 129), 2)
-            cv2.putText(frame, f"Simulated Camera Feed | Box #1", (60, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+            cv2.putText(frame, "WAITING FOR CAMERA FEED...", (120, 240), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 200, 255), 2)
 
-        # Calculate FPS
+        # FPS calculation
         self.frame_count += 1
         elapsed = time.time() - self.start_time
         if elapsed >= 1.0:
@@ -102,7 +76,7 @@ class CVVideoStreamTrack(VideoStreamTrack):
             self.frame_count = 0
             self.start_time = time.time()
 
-        # Run YOLO inference if model available
+        # Run YOLO inference
         if model is not None:
             try:
                 results = model.predict(source=frame, conf=0.25, verbose=False)
@@ -111,9 +85,9 @@ class CVVideoStreamTrack(VideoStreamTrack):
             except Exception as e:
                 logging.error(f"YOLO predict error: {e}")
 
-        # Overlay Edge telemetry info on frame
-        overlay_text = f"FPS: {self.fps:.1f} | Model: YOLOv8"
-        cv2.putText(frame, overlay_text, (frame.shape[1] - 220, frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 150), 1, cv2.LINE_AA)
+        # Add HUD overlay
+        overlay = f"MAC LOCAL CAMERA | FPS: {self.fps:.1f}"
+        cv2.putText(frame, overlay, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (16, 185, 129), 2, cv2.LINE_AA)
 
         # Convert to av VideoFrame
         video_frame = VideoFrame.from_ndarray(frame, format="bgr24")
@@ -125,6 +99,7 @@ class CVVideoStreamTrack(VideoStreamTrack):
         super().stop()
         if self.cap is not None and self.cap.isOpened():
             self.cap.release()
+            logging.info("Camera released successfully.")
 
 pcs = set()
 
@@ -138,24 +113,22 @@ async def offer(request):
 
         @pc.on("connectionstatechange")
         async def on_connectionstatechange():
-            logging.info(f"WebRTC Connection state is {pc.connectionState}")
+            logging.info(f"WebRTC Connection state: {pc.connectionState}")
             if pc.connectionState in ["failed", "closed"]:
                 await pc.close()
                 pcs.discard(pc)
 
-        video_track = CVVideoStreamTrack()
+        video_track = CameraVideoStreamTrack(camera_index=0)
         pc.addTrack(video_track)
 
         await pc.setRemoteDescription(offer_sdp)
         answer = await pc.createAnswer()
         await pc.setLocalDescription(answer)
 
-        logging.info("Successfully negotiated WebRTC offer/answer pair.")
+        logging.info("Local WebRTC Handshake successful.")
         return web.Response(
             content_type="application/json",
-            text=json.dumps(
-                {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
-            ),
+            text=json.dumps({"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}),
             headers=cors_headers
         )
     except Exception as e:
@@ -170,7 +143,8 @@ async def handle_health(request):
         content_type="application/json",
         text=json.dumps({
             "status": "ok",
-            "service": "webrtc_cv_server",
+            "service": "native_mac_webrtc_cv",
+            "bind": "127.0.0.1:8081",
             "model_loaded": model is not None,
             "classes": model.names if model else []
         }),
@@ -192,6 +166,8 @@ def create_app():
 
 if __name__ == "__main__":
     app = create_app()
-    port = int(os.environ.get("WEBRTC_PORT", 8081))
-    logging.info(f"Starting WebRTC Video Server on http://0.0.0.0:{port}")
-    web.run_app(app, host="0.0.0.0", port=port)
+    # STRICT LOOPBACK BIND: 127.0.0.1 ONLY (NOT 0.0.0.0)
+    HOST = "127.0.0.1"
+    PORT = 8081
+    logging.info(f"Starting Native WebRTC Server locked to {HOST}:{PORT}")
+    web.run_app(app, host=HOST, port=PORT)
