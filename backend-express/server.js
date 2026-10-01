@@ -6,20 +6,50 @@ require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: {
-        origin: '*',
-        methods: ['GET', 'POST']
+
+const allowedOrigins = [
+  'https://capstone.sangkolo.my.id',
+  'http://capstone.sangkolo.my.id',
+  'http://192.168.1.112:3000',
+  'http://192.168.1.112:5000',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000'
+];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('sangkolo.my.id')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
     }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
+app.use(cors(corsOptions));
+app.use(express.json());
+
+const io = new Server(server, {
+  cors: {
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('sangkolo.my.id')) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
 });
 
-// Expose Socket.io to routes
+// Expose Socket.io to routes and controllers
 app.set('io', io);
 
 const PORT = process.env.PORT || 5000;
-
-app.use(cors());
-app.use(express.json());
 
 const { verifyToken } = require('./middlewares/auth');
 
@@ -35,9 +65,11 @@ const cvResultsRoutes = require('./routes/cv_results');
 const harvestPredictionsRoutes = require('./routes/harvest_predictions');
 const boxLocationsRoutes = require('./routes/box_locations');
 const notificationsRoutes = require('./routes/notifications');
+const usersController = require('./controllers/usersController');
+const dashboardRoutes = require('./routes/dashboard');
 
 app.use('/api/tenants', verifyToken, tenantsRoutes);
-app.use('/api/users', usersRoutes); // verifyToken applied inside routes/users.js to allow /login
+app.use('/api/users', usersRoutes);
 app.use('/api/boxes', verifyToken, boxesRoutes);
 app.use('/api/automation-thresholds', verifyToken, automationThresholdsRoutes);
 app.use('/api/edge-sync', edgeSyncRoutes);
@@ -47,52 +79,26 @@ app.use('/api/cv-results', verifyToken, cvResultsRoutes);
 app.use('/api/harvest-predictions', verifyToken, harvestPredictionsRoutes);
 app.use('/api/box-locations', verifyToken, boxLocationsRoutes);
 app.use('/api/notifications', verifyToken, notificationsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
+// Direct /api/profile aliases
+app.get('/api/profile', verifyToken, usersController.getProfile);
+app.put('/api/profile', verifyToken, usersController.updateProfile);
+app.put('/api/profile/password', verifyToken, usersController.updatePassword);
+
+// Root healthcheck
 app.get('/', (req, res) => {
-    res.json({ message: 'Smart Farming API Cloud is running' });
+  res.json({ message: 'Smart Farming Central API is active', status: 'healthy' });
 });
 
-// Global Error Handler
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ error: 'Internal Server Error' });
-});
-
-// WebSocket connection handling & Mock Data Broadcast
+// Socket.io connection logging
 io.on('connection', (socket) => {
-    console.log(`Client connected: ${socket.id}`);
-
-    // Simulate sending real-time sensor data every 3 seconds
-    const interval = setInterval(() => {
-        // Mock data matching dashboard layout
-        const mockData = {
-            timestamp: new Date().toISOString(),
-            boxes: [
-                { id: 1, temp: (26 + Math.random() * 2).toFixed(1), humidity: (70 + Math.random() * 5).toFixed(1) },
-                { id: 2, temp: (27 + Math.random() * 2).toFixed(1), humidity: (75 + Math.random() * 5).toFixed(1) },
-                { id: 3, temp: (26.5 + Math.random() * 2).toFixed(1), humidity: (72 + Math.random() * 5).toFixed(1) },
-            ],
-            currentBox: {
-                airTemp: (27 + Math.random()).toFixed(2),
-                airHumidity: (70 + Math.random() * 2).toFixed(2),
-                mediaHumidity: (52 + Math.random() * 2).toFixed(2),
-                actuators: {
-                    heater: Math.random() > 0.5 ? 'ON' : 'OFF',
-                    kipas: Math.random() > 0.5 ? 'ON' : 'OFF',
-                    pompa: Math.random() > 0.5 ? 'ON' : 'OFF'
-                }
-            }
-        };
-
-        socket.emit('sensor-update', mockData);
-    }, 3000);
-
-    socket.on('disconnect', () => {
-        console.log(`Client disconnected: ${socket.id}`);
-        clearInterval(interval);
-    });
+  console.log(`[SOCKET] Client connected: ${socket.id}`);
+  socket.on('disconnect', () => {
+    console.log(`[SOCKET] Client disconnected: ${socket.id}`);
+  });
 });
 
 server.listen(PORT, () => {
-    console.log(`Server and WebSocket running on port ${PORT}`);
+  console.log(`[SERVER] Central Backend & WebSocket running on port ${PORT}`);
 });

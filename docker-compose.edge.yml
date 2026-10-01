@@ -1,48 +1,52 @@
 services:
-  mqtt-broker:
+  # === 1. LOCAL EDGE MQTT BROKER ===
+  mosquitto:
     image: eclipse-mosquitto:2
+    container_name: capstone-edge-mosquitto
     restart: unless-stopped
     ports:
       - "1883:1883"
-      - "9001:9001"
-    volumes:
-      - mosquitto-data:/mosquitto/data
-      - mosquitto-log:/mosquitto/log
-    command: sh -c "echo 'allow_anonymous true\nlistener 1883 0.0.0.0' > /mosquitto/config/mosquitto.conf && mosquitto -c /mosquitto/config/mosquitto.conf"
+    command: sh -c "printf 'allow_anonymous true\nlistener 1883 0.0.0.0\n' > /mosquitto/config/mosquitto.conf && mosquitto -c /mosquitto/config/mosquitto.conf"
 
-  edge-python:
+  # === 2. MOCK IOT TELEMETRY (ESP32 SIMULATOR) ===
+  mock-iot:
     build:
       context: ./edge-pi-python
       dockerfile: Dockerfile
+    container_name: capstone-edge-mock-iot
     restart: unless-stopped
-    depends_on:
-      - mqtt-broker
+    command: python mock_iot_publisher.py
+    volumes:
+      - ./edge-pi-python:/app
     environment:
-      - MQTT_BROKER=mqtt-broker
+      - MQTT_BROKER=mosquitto
       - MQTT_PORT=1883
-      - SYNC_URL=http://backend-pusat.com/api/edge-sync  # Sesuaikan dengan URL Cloud backend Anda
-    volumes:
-      - edge-data:/app/data
-    # WARNING: Baris 'devices' di bawah dimatikan sementara untuk testing di Windows. 
-    # NYALAKAN KEMBALI saat akan di-deploy ke Raspberry Pi.
-    # devices:
-    #   - /dev/video0:/dev/video0
+      - MQTT_TOPIC=maggot/sensor/data
+      - PUBLISH_INTERVAL_SEC=5
+    depends_on:
+      - mosquitto
 
-  edge-backend:
+  # === 3. EDGE PYTHON WORKERS (MQTT, CV, ML, LOCAL API, CLOUD SYNC) ===
+  edge-service:
     build:
-      context: ./backend-express
-      dockerfile: Dockerfile.edge
+      context: ./edge-pi-python
+      dockerfile: Dockerfile
+    container_name: capstone-edge-service
     restart: unless-stopped
-    ports:
-      - "5001:5000"
-    environment:
-      - PORT=5000
-      - DATA_SOURCE=sqlite
-      - SQLITE_DB_PATH=/app/data/edge_local.db
+    command: python main_edge.py
     volumes:
-      - edge-data:/app/data  # Berbagi volume database SQLite lokal yang sama dengan edge-python
-
-volumes:
-  mosquitto-data:
-  mosquitto-log:
-  edge-data:
+      - ./edge-pi-python:/app
+    environment:
+      - MQTT_BROKER=mosquitto
+      - MQTT_PORT=1883
+      - SQLITE_DB_PATH=edge_local.db
+      - SYNC_URL=http://host.docker.internal:5005/api/edge-sync
+      - SYNC_INTERVAL_SEC=5
+      - MOCK_CV=true
+      - CV_INTERVAL_SEC=10
+      - PREDICT_INTERVAL_SEC=20
+      - LOCAL_API_PORT=8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mosquitto

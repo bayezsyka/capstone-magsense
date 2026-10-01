@@ -3,9 +3,25 @@ import { io } from 'socket.io-client';
 
 const GlobalContext = createContext();
 
-const SOCKET_URL = import.meta.env.VITE_API_URL 
-  ? import.meta.env.VITE_API_URL.replace('/api', '') 
-  : 'http://localhost:5000';
+const getSocketUrl = () => {
+  const wsEnv = import.meta.env.VITE_WS_URL;
+  if (wsEnv && wsEnv.startsWith('http')) {
+    return wsEnv;
+  }
+  const apiEnv = import.meta.env.VITE_API_URL;
+  if (apiEnv && apiEnv.startsWith('http')) {
+    return apiEnv.replace(/\/api\/?$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location) {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:5000';
+    }
+    return 'https://api-capstone.sangkolo.my.id';
+  }
+  return 'http://localhost:5000';
+};
+
+const SOCKET_URL = getSocketUrl();
 
 export const GlobalProvider = ({ children }) => {
   // --- Auth State ---
@@ -35,20 +51,13 @@ export const GlobalProvider = ({ children }) => {
   const [realtimeData, setRealtimeData] = useState(null);
 
   useEffect(() => {
-    // Only connect if user is logged in
-    if (!token) {
-      if (socket) {
-        socket.disconnect();
-        setSocket(null);
-      }
-      return;
-    }
-
+    // Connect when user is authenticated or on public dashboard
     const newSocket = io(SOCKET_URL, {
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1500,
       autoConnect: true,
-      auth: { token }
+      transports: ['websocket', 'polling'],
+      auth: token ? { token } : {}
     });
 
     newSocket.on('connect', () => {
@@ -73,7 +82,7 @@ export const GlobalProvider = ({ children }) => {
       newSocket.off('new_sensor_data');
       newSocket.disconnect();
     };
-  }, [token]); // Re-run when token changes (login/logout)
+  }, [token]);
 
   const value = {
     user,

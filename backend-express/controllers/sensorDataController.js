@@ -2,7 +2,7 @@ const pool = require('../db');
 
 exports.getAllSensorData = async (req, res) => {
     try {
-        const { rows } = await pool.query('SELECT id, box_id, air_temp, air_humidity, media_humidity, timestamp FROM sensor_data ORDER BY timestamp DESC LIMIT 100');
+        const { rows } = await pool.query('SELECT id, box_id, air_temp, air_humidity, media_humidity, raw_soil_adc, source, timestamp FROM sensor_data ORDER BY timestamp DESC LIMIT 100');
         res.json(rows);
     } catch (err) {
         console.error(err);

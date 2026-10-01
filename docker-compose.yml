@@ -1,59 +1,52 @@
 services:
-  postgres:
-    image: postgres:16-alpine
+  # === 1. LOCAL EDGE MQTT BROKER ===
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: capstone-edge-mosquitto
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-praja171004}
-      POSTGRES_DB: ${POSTGRES_DB:-smart_farming_db}
     ports:
-      - "5432:5432"
+      - "1883:1883"
+    command: sh -c "printf 'allow_anonymous true\nlistener 1883 0.0.0.0\n' > /mosquitto/config/mosquitto.conf && mosquitto -c /mosquitto/config/mosquitto.conf"
+
+  # === 2. MOCK IOT TELEMETRY (ESP32 SIMULATOR) ===
+  mock-iot:
+    build:
+      context: ./edge-pi-python
+      dockerfile: Dockerfile
+    container_name: capstone-edge-mock-iot
+    restart: unless-stopped
+    command: python mock_iot_publisher.py
     volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./backend-express/database.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  backend:
-    build:
-      context: ./backend-express
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    ports:
-      - "5000:5000"
+      - ./edge-pi-python:/app
     environment:
-      PORT: 5000
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASS: ${DB_PASS:-praja171004}
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-smart_farming_db}
-      JWT_SECRET: ${JWT_SECRET:-super_secret_key_industri}
-      DATA_SOURCE: ${DATA_SOURCE:-simulator}
-      SIMULATOR_URL: ${SIMULATOR_URL:-https://magsense-sim.farros.space}
-      SIMULATOR_POLL_INTERVAL_MS: ${SIMULATOR_POLL_INTERVAL_MS:-5000}
-      MQTT_URL: ${MQTT_URL:-mqtt://broker.hivemq.com}
-      MQTT_SENSOR_TOPIC: ${MQTT_SENSOR_TOPIC:-maggot/kandang/sensor}
+      - MQTT_BROKER=mosquitto
+      - MQTT_PORT=1883
+      - MQTT_TOPIC=maggot/sensor/data
+      - PUBLISH_INTERVAL_SEC=5
     depends_on:
-      postgres:
-        condition: service_healthy
+      - mosquitto
 
-
-  frontend:
+  # === 3. EDGE PYTHON WORKERS (MQTT, CV, ML, LOCAL API, CLOUD SYNC) ===
+  edge-service:
     build:
-      context: ./frontend-react
+      context: ./edge-pi-python
       dockerfile: Dockerfile
-      args:
-        VITE_API_URL: ""
-        VITE_PYTHON_URL: "http://localhost:5002"
+    container_name: capstone-edge-service
     restart: unless-stopped
+    command: python main_edge.py
+    volumes:
+      - ./edge-pi-python:/app
+    environment:
+      - MQTT_BROKER=mosquitto
+      - MQTT_PORT=1883
+      - SQLITE_DB_PATH=edge_local.db
+      - SYNC_URL=http://host.docker.internal:5005/api/edge-sync
+      - SYNC_INTERVAL_SEC=5
+      - MOCK_CV=true
+      - CV_INTERVAL_SEC=10
+      - PREDICT_INTERVAL_SEC=20
+      - LOCAL_API_PORT=8080
     ports:
-      - "3000:80"
+      - "8080:8080"
     depends_on:
-      - backend
-
-volumes:
-  pgdata:
+      - mosquitto

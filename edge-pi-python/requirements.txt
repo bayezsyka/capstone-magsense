@@ -1,8 +1,5 @@
-paho-mqtt
-ultralytics
-xgboost
-requests
-aiortc
-aiohttp
-opencv-python
-pandas
+paho-mqtt>=1.6.1
+requests>=2.31.0
+pandas>=2.0.0
+xgboost>=2.0.0
+opencv-python-headless>=4.8.0

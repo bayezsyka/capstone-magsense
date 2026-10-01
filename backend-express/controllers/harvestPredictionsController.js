@@ -2,7 +2,7 @@ const pool = require('../db');
 
 exports.getAllHarvestPredictions = async (req, res) => {
     try {
-        const { rows } = await pool.query('SELECT id, box_id, estimated_days, urgency_level, timestamp FROM harvest_predictions ORDER BY timestamp DESC LIMIT 100');
+        const { rows } = await pool.query('SELECT id, box_id, estimated_days, urgency_level, confidence, source, timestamp FROM harvest_predictions ORDER BY timestamp DESC LIMIT 100');
         res.json(rows);
     } catch (err) {
         console.error(err);
