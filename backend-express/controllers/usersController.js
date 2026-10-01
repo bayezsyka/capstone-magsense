@@ -6,7 +6,11 @@ const jwt = require('jsonwebtoken');
 exports.loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
-        const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        if (!email || !password) {
+            return res.status(400).json({ error: "Email dan password wajib diisi" });
+        }
+        const cleanEmail = email.trim().toLowerCase();
+        const result = await pool.query("SELECT * FROM users WHERE LOWER(TRIM(email)) = $1", [cleanEmail]);
         if (result.rows.length === 0) {
             return res.status(400).json({ error: 'Email atau password salah' });
         }
