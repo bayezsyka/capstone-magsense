@@ -128,7 +128,7 @@ def save_cv_results(metrics):
         ))
         conn.commit()
         conn.close()
-        logging.info(f"Saved CV Results Box {metrics[box_id]}: Total={metrics[total_detected]} | Dominant={metrics[dominant_phase]} | Conf={metrics[confidence_score]} | Source={metrics[source]}")
+        logging.info(f"Saved CV Results Box {metrics['box_id']}: Total={metrics['total_detected']} | Dominant={metrics['dominant_phase']} | Conf={metrics['confidence_score']} | Source={metrics['source']}")
     except Exception as e:
         logging.error(f"Error saving CV results to SQLite: {e}")
 
