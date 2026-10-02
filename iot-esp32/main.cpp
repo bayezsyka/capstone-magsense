@@ -215,6 +215,7 @@ void loop() {
     doc["temperature"] = currentTemp;
     doc["humidity"] = currentHumAir;
     doc["media_humidity"] = currentMoisture;
+    doc["source"] = "real";
     
     // Status aktuator
     JsonObject actuators = doc.createNestedObject("actuators");

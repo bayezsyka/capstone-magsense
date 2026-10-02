@@ -21,7 +21,7 @@ def save_payload_to_db(data):
         hum = data.get("humidity", data.get("air_humidity", 0.0))
         media_hum = data.get("media_humidity", 0.0)
         raw_adc = data.get("raw_soil_adc", 0)
-        source = data.get("source", "real")
+        source = data.get("source", "unknown")
         ts = data.get("timestamp", datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
 
         conn = get_db_connection()
