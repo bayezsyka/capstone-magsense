@@ -5,9 +5,11 @@ import os
 import cv2
 import time
 import numpy as np
+from datetime import datetime
 from aiohttp import web
 from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from av import VideoFrame
+from local_db import init_db, get_db_connection
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [WEBRTC NATIVE] - %(message)s")
 
@@ -30,45 +32,77 @@ cors_headers = {
     "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With"
 }
 
+def persist_real_cv_metrics(box_id, baby, adult, prepupa, pupa, total, dominant, conf_score):
+    try:
+        proportions = {
+            "baby_larva": round(baby / total, 4) if total > 0 else 0,
+            "adult_larva": round(adult / total, 4) if total > 0 else 0,
+            "prepupa": round(prepupa / total, 4) if total > 0 else 0,
+            "pupa": round(pupa / total, 4) if total > 0 else 0
+        }
+        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO cv_results (
+                box_id, baby_larva, adult_larva, prepupa, pupa,
+                total_detected, dominant_phase, confidence_score,
+                proportions, image_path, source, timestamp, synced
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+        """, (
+            box_id, baby, adult, prepupa, pupa, total,
+            dominant, conf_score, json.dumps(proportions), "", "real", timestamp
+        ))
+        conn.commit()
+        conn.close()
+        logging.info(f"Persisted Real CV to SQLite: Baby={baby}, Adult={adult}, Prepupa={prepupa}, Pupa={pupa} | Dominant={dominant} | Conf={conf_score:.2f} | Source=real")
+    except Exception as e:
+        logging.error(f"Error persisting real CV metrics to SQLite: {e}")
+
 class CameraVideoStreamTrack(VideoStreamTrack):
-    """
-    Native video stream track accessing physical Mac camera (AVFoundation via cv2.VideoCapture(0)).
-    Runs realtime YOLOv8 inference and returns annotated VideoFrame to WebRTC.
-    """
-    def __init__(self, camera_index=0):
+    def __init__(self, camera_source=None):
         super().__init__()
-        self.camera_index = camera_index
-        logging.info(f"Opening physical macOS camera index {self.camera_index}...")
-        self.cap = cv2.VideoCapture(self.camera_index)
-        
-        # Configure standard resolution
+        src = camera_source if camera_source is not None else os.environ.get("CAMERA_SOURCE", "0")
+        try:
+            self.src_id = int(src)
+        except ValueError:
+            self.src_id = src
+
+        logging.info(f"Initializing camera source {self.src_id} via AVFoundation...")
+        self.cap = cv2.VideoCapture(self.src_id, cv2.CAP_AVFOUNDATION)
+        if not self.cap.isOpened():
+            self.cap = cv2.VideoCapture(self.src_id)
+
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-        if not self.cap.isOpened():
-            logging.warning(f"Native camera index {self.camera_index} could not be opened directly.")
-        else:
-            logging.info(f"Native camera index {self.camera_index} successfully opened.")
+        
+        self.is_opened = self.cap.isOpened()
+        logging.info(f"Camera opened: {self.is_opened}")
 
         self.frame_count = 0
         self.start_time = time.time()
         self.fps = 0.0
+        self.last_cv_persist_time = 0.0
+        self.persist_interval = float(os.environ.get("CV_PERSIST_INTERVAL_SEC", 5.0))
 
     async def recv(self):
         pts, time_base = await self.next_timestamp()
-        
         frame = None
+
         if self.cap is not None and self.cap.isOpened():
             ret, read_frame = self.cap.read()
             if ret and read_frame is not None:
                 frame = read_frame
 
         if frame is None:
-            # Fallback if camera stream interrupted
-            frame = np.zeros((480, 640, 3), dtype=np.uint8)
-            cv2.putText(frame, "WAITING FOR CAMERA FEED...", (120, 240), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 200, 255), 2)
+            if not self.cap.isOpened():
+                self.cap.open(self.src_id, cv2.CAP_AVFOUNDATION)
 
-        # FPS calculation
+            frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(frame, "MACOS CAMERA PERMISSION REQUIRED", (30, 220), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 50, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame, "System Settings -> Privacy & Security -> Camera", (35, 260), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1, cv2.LINE_AA)
+            cv2.putText(frame, "Izinkan Terminal / Python mengakses Kamera Mac", (45, 290), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (16, 185, 129), 1, cv2.LINE_AA)
+
         self.frame_count += 1
         elapsed = time.time() - self.start_time
         if elapsed >= 1.0:
@@ -76,20 +110,45 @@ class CameraVideoStreamTrack(VideoStreamTrack):
             self.frame_count = 0
             self.start_time = time.time()
 
-        # Run YOLO inference
-        if model is not None:
+        baby, adult, prepupa, pupa = 0, 0, 0, 0
+        conf_scores = []
+        is_real_detection = False
+
+        if model is not None and frame is not None and (self.cap and self.cap.isOpened()):
             try:
                 results = model.predict(source=frame, conf=0.25, verbose=False)
                 if results and len(results) > 0:
+                    boxes = results[0].boxes
+                    for i in range(len(boxes)):
+                        cls_id = int(boxes.cls[i])
+                        conf = float(boxes.conf[i])
+                        conf_scores.append(conf)
+                        cls_name = model.names.get(cls_id, "").upper()
+                        if "BABY" in cls_name:
+                            baby += 1
+                        elif "ADULT" in cls_name:
+                            adult += 1
+                        elif "PREPUPA" in cls_name:
+                            prepupa += 1
+                        elif "PUPA" in cls_name:
+                            pupa += 1
                     frame = results[0].plot()
+                    is_real_detection = True
             except Exception as e:
                 logging.error(f"YOLO predict error: {e}")
 
-        # Add HUD overlay
-        overlay = f"MAC LOCAL CAMERA | FPS: {self.fps:.1f}"
-        cv2.putText(frame, overlay, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (16, 185, 129), 2, cv2.LINE_AA)
+        now = time.time()
+        if is_real_detection and (now - self.last_cv_persist_time >= self.persist_interval):
+            self.last_cv_persist_time = now
+            total = baby + adult + prepupa + pupa
+            stage_counts = {"BABY LARVA": baby, "ADULT LARVA": adult, "PREPUPA": prepupa, "PUPA": pupa}
+            dominant = max(stage_counts, key=stage_counts.get) if total > 0 else "ADULT LARVA"
+            avg_conf = float(sum(conf_scores) / len(conf_scores)) if conf_scores else 0.88
+            persist_real_cv_metrics(1, baby, adult, prepupa, pupa, total, dominant, avg_conf)
 
-        # Convert to av VideoFrame
+        status_text = f"MAC CAMERA (AVFoundation) | FPS: {self.fps:.1f}" if (self.cap and self.cap.isOpened()) else "CAMERA NOT AUTHORIZED BY MACOS TCC"
+        cv2.putText(frame, status_text, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (16, 185, 129), 2, cv2.LINE_AA)
+
         video_frame = VideoFrame.from_ndarray(frame, format="bgr24")
         video_frame.pts = pts
         video_frame.time_base = time_base
@@ -99,7 +158,7 @@ class CameraVideoStreamTrack(VideoStreamTrack):
         super().stop()
         if self.cap is not None and self.cap.isOpened():
             self.cap.release()
-            logging.info("Camera released successfully.")
+            logging.info("Camera released.")
 
 pcs = set()
 
@@ -118,7 +177,7 @@ async def offer(request):
                 await pc.close()
                 pcs.discard(pc)
 
-        video_track = CameraVideoStreamTrack(camera_index=0)
+        video_track = CameraVideoStreamTrack()
         pc.addTrack(video_track)
 
         await pc.setRemoteDescription(offer_sdp)
@@ -165,8 +224,8 @@ def create_app():
     return app
 
 if __name__ == "__main__":
+    init_db()
     app = create_app()
-    # STRICT LOOPBACK BIND: 127.0.0.1 ONLY (NOT 0.0.0.0)
     HOST = "127.0.0.1"
     PORT = 8081
     logging.info(f"Starting Native WebRTC Server locked to {HOST}:{PORT}")

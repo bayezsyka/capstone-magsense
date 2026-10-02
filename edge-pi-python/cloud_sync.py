@@ -84,7 +84,7 @@ def run_sync_cycle():
                 "box_id": r["box_id"],
                 "predicted_days": r["predicted_days"],
                 "urgency_level": r["urgency_level"],
-                "confidence": r["confidence"],
+                "confidence": r.get("confidence"),
                 "source": r.get("source", "real"),
                 "timestamp": r["timestamp"]
             } for r in harvest_rows
