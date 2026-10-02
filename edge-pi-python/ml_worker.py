@@ -91,9 +91,19 @@ def check_freshness(sensor_row, cv_row):
     if not sensor_dt or not cv_dt:
         return False, "Format timestamp pada record tidak valid"
 
-    now = datetime.utcnow()
-    sensor_age = (now - sensor_dt).total_seconds()
-    cv_age = (now - cv_dt).total_seconds()
+    now_utc = datetime.utcnow()
+    now_local = datetime.now()
+
+    # Determine reference now (handling potential UTC vs local timezone differences in SQLite storage)
+    # If dt matches closer to local time, use local time, else use UTC
+    age_from_utc = (now_utc - sensor_dt).total_seconds()
+    age_from_local = (now_local - sensor_dt).total_seconds()
+    sensor_age = age_from_local if abs(age_from_local) < abs(age_from_utc) else age_from_utc
+
+    cv_age_from_utc = (now_utc - cv_dt).total_seconds()
+    cv_age_from_local = (now_local - cv_dt).total_seconds()
+    cv_age = cv_age_from_local if abs(cv_age_from_local) < abs(cv_age_from_utc) else cv_age_from_utc
+
     pair_delta = abs((sensor_dt - cv_dt).total_seconds())
 
     if sensor_age > MAX_SENSOR_AGE_SEC:
