@@ -11,7 +11,6 @@ from local_db import init_db, get_db_connection
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [ML XGBOOST] - %(message)s")
 
-# Model paths to check
 DEFAULT_MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "model_xgboost_regressor.json")
 MODEL_FILE = os.environ.get("XGB_MODEL_PATH", DEFAULT_MODEL_PATH)
 if not os.path.exists(MODEL_FILE):
@@ -21,7 +20,11 @@ if not os.path.exists(MODEL_FILE):
 
 PREDICT_INTERVAL_SEC = int(os.environ.get("PREDICT_INTERVAL_SEC", 15))
 
-# Global booster / model instance
+# Configurable Freshness Thresholds (in seconds)
+MAX_SENSOR_AGE_SEC = float(os.environ.get("MAX_SENSOR_AGE_SEC", 60.0))
+MAX_CV_AGE_SEC = float(os.environ.get("MAX_CV_AGE_SEC", 120.0))
+MAX_PAIR_DELTA_SEC = float(os.environ.get("MAX_PAIR_DELTA_SEC", 90.0))
+
 loaded_model = None
 
 def load_xgboost_model():
@@ -40,10 +43,19 @@ def load_xgboost_model():
         logging.error(f"Failed to load XGBoost model from {MODEL_FILE}: {e}")
         return None
 
+def parse_sqlite_timestamp(ts_val):
+    if not ts_val:
+        return None
+    try:
+        # Check standard format
+        if "T" in str(ts_val):
+            return datetime.fromisoformat(str(ts_val).replace("Z", ""))
+        return datetime.strptime(str(ts_val), "%Y-%m-%d %H:%M:%S")
+    except Exception as e:
+        logging.warning(f"Failed to parse timestamp '{ts_val}': {e}")
+        return None
+
 def get_latest_readings(box_id=1):
-    """
-    Retrieves latest valid records from sensor_data and cv_results without fake defaults.
-    """
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -57,8 +69,8 @@ def get_latest_readings(box_id=1):
 
     cursor.execute("""
         SELECT baby_larva, adult_larva, prepupa, pupa, total_detected, dominant_phase, source, timestamp
-        FROM cv_results
-        WHERE box_id = ?
+        FROM cv_results 
+        WHERE box_id = ? 
         ORDER BY timestamp DESC LIMIT 1
     """, (box_id,))
     cv_row = cursor.fetchone()
@@ -66,25 +78,34 @@ def get_latest_readings(box_id=1):
 
     return sensor_row, cv_row
 
+def check_freshness(sensor_row, cv_row):
+    """
+    Validates freshness and temporal proximity between IoT telemetry and CV detection.
+    """
+    if not sensor_row or not cv_row:
+        return False, "Data sensor_data atau cv_results belum tersedia"
+
+    sensor_dt = parse_sqlite_timestamp(sensor_row["timestamp"])
+    cv_dt = parse_sqlite_timestamp(cv_row["timestamp"])
+
+    if not sensor_dt or not cv_dt:
+        return False, "Format timestamp pada record tidak valid"
+
+    now = datetime.utcnow()
+    sensor_age = (now - sensor_dt).total_seconds()
+    cv_age = (now - cv_dt).total_seconds()
+    pair_delta = abs((sensor_dt - cv_dt).total_seconds())
+
+    if sensor_age > MAX_SENSOR_AGE_SEC:
+        return False, f"sensor_data stale (age: {sensor_age:.1f}s > max {MAX_SENSOR_AGE_SEC}s)"
+    if cv_age > MAX_CV_AGE_SEC:
+        return False, f"cv_results stale (age: {cv_age:.1f}s > max {MAX_CV_AGE_SEC}s)"
+    if pair_delta > MAX_PAIR_DELTA_SEC:
+        return False, f"stale IoT/CV pair (delta: {pair_delta:.1f}s > max {MAX_PAIR_DELTA_SEC}s)"
+
+    return True, None
+
 def validate_and_extract_features(sensor_row, cv_row):
-    """
-    Validates input contract for 7 exact XGBoost features:
-    1. suhu_udara_c (float)
-    2. kelembapan_udara_pct (float)
-    3. kelembapan_media_pct (float)
-    4. jumlah_baby_larva (int)
-    5. jumlah_adult_larva (int)
-    6. jumlah_prepupa (int)
-    7. jumlah_pupa (int)
-
-    Returns (features_dict, is_valid, error_reason)
-    """
-    if not sensor_row:
-        return None, False, "Tabel sensor_data kosong untuk box_id ini"
-    if not cv_row:
-        return None, False, "Tabel cv_results kosong untuk box_id ini"
-
-    # 1. Microclimate features
     temp = sensor_row["temperature"]
     hum = sensor_row["humidity"]
     media_hum = sensor_row["media_humidity"]
@@ -96,7 +117,6 @@ def validate_and_extract_features(sensor_row, cv_row):
     if media_hum is None or math.isnan(media_hum):
         return None, False, "kelembapan_media_pct bernilai null/NaN"
 
-    # Range validations
     if not (-10.0 <= float(temp) <= 60.0):
         return None, False, f"suhu_udara_c di luar rentang valid: {temp}"
     if not (0.0 <= float(hum) <= 100.0):
@@ -104,7 +124,6 @@ def validate_and_extract_features(sensor_row, cv_row):
     if not (0.0 <= float(media_hum) <= 100.0):
         return None, False, f"kelembapan_media_pct di luar rentang valid: {media_hum}"
 
-    # 2. CV detection count features
     baby = cv_row["baby_larva"]
     adult = cv_row["adult_larva"]
     prepupa = cv_row["prepupa"]
@@ -132,9 +151,6 @@ def validate_and_extract_features(sensor_row, cv_row):
     return features, True, None
 
 def calculate_domain_estimate_fallback(f):
-    """
-    Fallback domain heuristic if model is unreadable.
-    """
     total_larvae = f["jumlah_baby_larva"] + f["jumlah_adult_larva"] + f["jumlah_prepupa"] + f["jumlah_pupa"]
     prepupa_ratio = (f["jumlah_prepupa"] + f["jumlah_pupa"]) / total_larvae if total_larvae > 0 else 0.15
     temp_factor = (f["suhu_udara_c"] - 28.0) * 0.2
@@ -147,10 +163,17 @@ def predict_harvest(box_id=1):
         load_xgboost_model()
 
     sensor_row, cv_row = get_latest_readings(box_id)
-    features, is_valid, error_reason = validate_and_extract_features(sensor_row, cv_row)
+    
+    # 1. Freshness check
+    is_fresh, stale_reason = check_freshness(sensor_row, cv_row)
+    if not is_fresh:
+        logging.warning(f"prediction skipped: {stale_reason}")
+        return None
 
+    # 2. Value validation
+    features, is_valid, error_reason = validate_and_extract_features(sensor_row, cv_row)
     if not is_valid:
-        logging.warning(f"Prediction skipped for box_id {box_id}: {error_reason}")
+        logging.warning(f"prediction skipped for box_id {box_id}: {error_reason}")
         return None
 
     pred_days = None
@@ -158,7 +181,6 @@ def predict_harvest(box_id=1):
 
     if loaded_model is not None:
         try:
-            # Construct DataFrame with exact column order
             feature_order = [
                 "suhu_udara_c",
                 "kelembapan_udara_pct",
@@ -171,9 +193,7 @@ def predict_harvest(box_id=1):
             df = pd.DataFrame([features])[feature_order]
             dmatrix = xgb.DMatrix(df)
             raw_pred = float(loaded_model.predict(dmatrix)[0])
-            
-            # Log raw prediction value
-            logging.info(f"Raw XGBoost output: {raw_pred:.4f} days")
+            logging.info(f"Raw XGBoost output: {raw_pred:.4f} days (CV Source: {cv_row['source']})")
             pred_days = raw_pred
             source = "xgboost"
         except Exception as e:
@@ -185,7 +205,6 @@ def predict_harvest(box_id=1):
         pred_days = calculate_domain_estimate_fallback(features)
         source = "modular_rule"
 
-    # Determine Urgency Level based on predicted days
     if pred_days <= 3.0:
         urgency = "High"
     elif pred_days <= 7.0:
@@ -193,13 +212,12 @@ def predict_harvest(box_id=1):
     else:
         urgency = "Low"
 
-    confidence = 0.95
-
+    # NO FAKE CONFIDENCE FOR REGRESSOR: Use None / Null
     return {
         "box_id": box_id,
         "predicted_days": round(pred_days, 2),
         "urgency_level": urgency,
-        "confidence": confidence,
+        "confidence": None,
         "source": source,
         "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
         "features": features

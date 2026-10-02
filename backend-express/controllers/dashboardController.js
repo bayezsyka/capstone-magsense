@@ -58,7 +58,7 @@ exports.getDashboardSummary = async (req, res) => {
             harvestPrediction: {
                 estimatedDays: latestPred.estimated_days ? parseFloat(latestPred.estimated_days).toFixed(1) : '12.0',
                 urgencyLevel: latestPred.urgency_level || 'Low',
-                confidence: latestPred.confidence ? parseFloat(latestPred.confidence).toFixed(2) : '0.94',
+                confidence: latestPred.confidence ? parseFloat(latestPred.confidence).toFixed(2) : null,
                 source: latestPred.source || 'modular_rule'
             },
             cvAnalysis: {

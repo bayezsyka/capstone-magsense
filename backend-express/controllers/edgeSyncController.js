@@ -90,7 +90,7 @@ exports.syncData = async (req, res) => {
                      WHERE NOT EXISTS (
                         SELECT 1 FROM harvest_predictions WHERE box_id = $1::uuid AND "timestamp" = $6::timestamp
                      )`,
-                    [boxUuid, hp.predicted_days, hp.urgency_level || 'Medium', hp.confidence || 0.95, hp.source || 'real', hp.timestamp]
+                    [boxUuid, hp.predicted_days, hp.urgency_level || 'Medium', hp.confidence !== undefined ? hp.confidence : null, hp.source || 'real', hp.timestamp]
                 );
             }
             summary.harvest_predictions = harvest_predictions.length;

@@ -80,8 +80,8 @@ export default function Prediction() {
               <TrendingUp size={24} className="text-white" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-wider text-green-100">MODEL & CONFIDENCE</p>
-              <p className="text-3xl font-black">{box1Confidence}%</p>
+              <p className="text-[10px] font-black uppercase tracking-wider text-green-100">METODE REGRESI</p>
+              <p className="text-3xl font-black">XGBoost</p>
             </div>
           </div>
         </div>
