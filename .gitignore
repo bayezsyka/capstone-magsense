@@ -1,8 +1,13 @@
 # === DEPENDENCIES ===
 node_modules/
 venv/
+venv*/
 env/
+env*/
 .venv/
+.venv*/
+ENV/
+*.egg-info/
 
 # === BUILD OUTPUTS ===
 dist/
@@ -19,6 +24,9 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # === RUNTIME DATABASES ===
 *.db
