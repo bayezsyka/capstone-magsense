@@ -1,3 +1,7 @@
+# Capstone Magsense
+
+[![CI/CD Central Deploy (CT 801)](https://github.com/bayezsyka/capstone-magsense/actions/workflows/deploy.yml/badge.svg)](https://github.com/bayezsyka/capstone-magsense/actions/workflows/deploy.yml)
+
 **Setup Capstone Magsense — Docker Desktop**
 
 Buat yang baru clone repo dan mau langsung jalanin project di Windows, macOS, atau Linux:
