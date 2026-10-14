@@ -1,0 +1,29 @@
+name: CI/CD Central Deploy (CT 801)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild all containers (Backend & Frontend)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: deploy-ct801
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to CT 801
+    runs-on: [self-hosted, capstone-ct801]
+    steps:
+      - name: Execute Deployment Pipeline
+        env:
+          FORCE_REBUILD_ALL: ${{ inputs.force_rebuild || 'false' }}
+        run: |
+          chmod +x /capstone/deploy.sh
+          /capstone/deploy.sh
