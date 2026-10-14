@@ -86,9 +86,9 @@ app.get('/api/profile', verifyToken, usersController.getProfile);
 app.put('/api/profile', verifyToken, usersController.updateProfile);
 app.put('/api/profile/password', verifyToken, usersController.updatePassword);
 
-// Root healthcheck
-app.get('/', (req, res) => {
-  res.json({ message: 'Smart Farming Central API is active', status: 'healthy' });
+// Root and API healthcheck
+app.get(['/', '/api/health'], (req, res) => {
+  res.json({ message: 'Smart Farming Central API is active', status: 'healthy', timestamp: new Date().toISOString() });
 });
 
 // Socket.io connection logging
