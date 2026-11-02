@@ -138,3 +138,14 @@ INSERT INTO public.automation_thresholds (id, tenant_id, floor_level, temp_min, 
 VALUES
 ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 1, 26.00, 32.00, 60.00, 80.00, 45.00, 70.00)
 ON CONFLICT (id) DO NOTHING;
+
+
+-- Tambahan Seed Akun Capstone & Operator
+INSERT INTO public.users (id, tenant_id, username, email, password, role, is_active)
+VALUES 
+    ('96b3ffc0-c8f1-4a9d-a66a-d896e6ec7fb1', '00000000-0000-0000-0000-000000000001', 'Admin Capstone', 'admin@capstone.com', 'REDACTED_BCRYPT_HASH', 'admin', true),
+    ('4b5e0f52-54b6-454d-bab3-ffdf609c3aaf', '00000000-0000-0000-0000-000000000001', 'Operator Capstone', 'operator@capstone.com', 'REDACTED_BCRYPT_HASH', 'operator', true),
+    ('4c6ee1a6-5c32-4615-9b96-3146599eb584', '00000000-0000-0000-0000-000000000001', 'Operator Maggott', 'operator@maggott.com', 'REDACTED_BCRYPT_HASH', 'operator', true),
+    ('4d7ff2b7-6e43-4726-bcb4-00ee700fc695', '00000000-0000-0000-0000-000000000001', 'Admin Maggot', 'admin@maggot.com', 'REDACTED_BCRYPT_HASH', 'admin', true),
+    ('5e8aa3c8-7f54-4837-cdc5-11ff811ad706', '00000000-0000-0000-0000-000000000001', 'Operator Maggot', 'operator@maggot.com', 'REDACTED_BCRYPT_HASH', 'operator', true)
+ON CONFLICT (email) DO NOTHING;
