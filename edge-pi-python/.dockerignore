@@ -1,3 +1,12 @@
 __pycache__
-.git
 *.pyc
+*.pyo
+*.log
+.git
+.venv
+venv
+env
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3

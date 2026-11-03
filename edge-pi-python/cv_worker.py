@@ -93,15 +93,13 @@ def run_cv_loop():
     logging.info("CV Worker started. Monitoring for real CV stream from WebRTC...")
     while True:
         try:
-            if MOCK_CV:
+            if has_recent_real_cv(box_id=1, max_age_sec=30):
+                logging.debug("Real CV stream actively persisting from camera.")
+            elif MOCK_CV:
                 metrics = generate_mock_cv_metrics(box_id=1)
                 save_cv_results(metrics)
             else:
-                # If WebRTC pipeline is active, real CV is already persisted by webrtc_server.py
-                if not has_recent_real_cv(box_id=1, max_age_sec=30):
-                    logging.info("No active real CV stream detected in last 30s. Standby / waiting for camera...")
-                else:
-                    logging.debug("Real CV stream actively persisting from camera.")
+                logging.info("No active real CV stream detected in last 30s. Standby / waiting for camera...")
             time.sleep(CV_INTERVAL_SEC)
         except Exception as e:
             logging.error(f"Error in CV worker loop: {e}")

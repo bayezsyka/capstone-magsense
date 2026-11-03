@@ -51,7 +51,6 @@ def on_connect(client, userdata, flags, rc):
     if rc == 0:
         logging.info(f"Connected to MQTT Broker at {MQTT_BROKER}:{MQTT_PORT}")
         client.subscribe(MQTT_TOPIC_SENSOR)
-        client.subscribe("maggot/sensor/#")
         logging.info(f"Subscribed to topic: {MQTT_TOPIC_SENSOR}")
     else:
         logging.error(f"Failed to connect to MQTT broker, return code: {rc}")
