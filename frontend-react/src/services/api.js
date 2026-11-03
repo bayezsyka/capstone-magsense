@@ -135,6 +135,7 @@ export const deleteSensorData = async (id) => { try { const res = await api.dele
 export const getAllCvResults = async () => { try { const res = await api.get("/cv-results"); return res.data; } catch (e) { handleError(e, "Gagal memuat CV results"); } };
 export const getCvResults = getAllCvResults;
 export const deleteCvResult = async (id) => { try { const res = await api.delete(`/cv-results/${id}`); return res.data; } catch (e) { handleError(e, "Gagal menghapus CV result"); } };
+export const scanFrameCv = async (payload) => { try { const res = await api.post("/cv-results/scan-frame", payload); return res.data; } catch (e) { handleError(e, "Gagal memindai frame kamera"); } };
 
 export const getAllActuatorLogs = async () => { try { const res = await api.get("/actuator-logs"); return res.data; } catch (e) { handleError(e, "Gagal memuat actuator logs"); } };
 export const getActuatorLogs = getAllActuatorLogs;
