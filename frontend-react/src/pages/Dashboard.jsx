@@ -1,111 +1,30 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React from 'react';
 import useWebSocket from '../hooks/useWebSocket';
-import { getDashboardSummary } from '../services/api';
-import { Activity, Zap, Wind, Droplets, Thermometer, Sprout } from 'lucide-react';
+import useBoxOverview from '../hooks/useBoxOverview';
+import { useGlobalContext } from '../context/GlobalContext';
+import { Activity, Zap, Wind, Droplets, Thermometer, Sprout, Box as BoxIcon, Radio } from 'lucide-react';
 import SkeletonCard from '../components/SkeletonCard';
 import ErrorBoundary from '../components/ErrorBoundary';
+import BoxCardGrid from '../components/BoxCardGrid';
 
 const Dashboard = () => {
-  const { realtimeData, isConnected } = useWebSocket();
+  const { user } = useGlobalContext();
+  const { isConnected } = useWebSocket();
+  const { cards, summary, isLoading } = useBoxOverview({ includeSensorData: true, pollMs: 10000 });
 
-  const [sensorData, setSensorData] = useState({
-    boxes: [
-      { id: 1, temp: '30.5', humidity: '70.0' },
-      { id: 2, temp: '29.5', humidity: '72.0' },
-      { id: 3, temp: '31.2', humidity: '68.0' },
-    ],
-    currentBox: {
-      airTemp: '30.5',
-      airHumidity: '70.0',
-      mediaHumidity: '55.0',
-      actuators: {
-        heater: 'OFF',
-        kipas: 'OFF',
-        pompa: 'OFF'
-      },
-      source: 'mock'
-    },
-    prediction: {
-      estimatedDays: '13',
-      phase: 'Monitoring (Adult Larva)'
-    }
-  });
+  const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
+  const primaryCard = cards.find((card) => card.number === 1) || cards[0] || null;
+  const actuators = isAdmin ? (summary?.currentBox?.actuators || {}) : {};
+  const summaryDays = isAdmin ? parseFloat(summary?.harvestPrediction?.estimatedDays) : null;
+  const estimatedDays = primaryCard?.days ?? summaryDays;
 
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Load initial data via API
-  useEffect(() => {
-    let isMounted = true;
-    const fetchInitialData = async () => {
-      try {
-        setIsLoading(true);
-        const data = await getDashboardSummary();
-        if (isMounted && data) {
-          setSensorData(prev => ({
-            ...prev,
-            boxes: data.boxes || prev.boxes,
-            currentBox: {
-              ...prev.currentBox,
-              airTemp: data.currentBox?.airTemp || prev.currentBox.airTemp,
-              airHumidity: data.currentBox?.airHumidity || prev.currentBox.airHumidity,
-              mediaHumidity: data.currentBox?.mediaHumidity || prev.currentBox.mediaHumidity,
-              actuators: data.currentBox?.actuators || prev.currentBox.actuators,
-              source: data.currentBox?.source || prev.currentBox.source
-            },
-            prediction: {
-              estimatedDays: data.harvestPrediction?.estimatedDays ? Math.round(parseFloat(data.harvestPrediction.estimatedDays)) : '13',
-              phase: data.cvAnalysis?.dominantPhase || 'Adult Larva'
-            }
-          }));
-        }
-      } catch (err) {
-        console.warn('Dashboard summary fetch notice:', err?.message || err);
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
-    };
-    fetchInitialData();
-    return () => { isMounted = false; };
-  }, []);
-
-  // Map realtimeData (from Edge) to Dashboard UI structure
-  useEffect(() => {
-    if (realtimeData) {
-      const newBoxes = [...sensorData.boxes];
-      let newCurrentBox = { ...sensorData.currentBox };
-
-      if (Array.isArray(realtimeData)) {
-        realtimeData.forEach(reading => {
-          const boxIndex = newBoxes.findIndex(b => b.id === (reading.box_id || 1));
-          if (boxIndex !== -1) {
-            newBoxes[boxIndex] = {
-              id: reading.box_id || 1,
-              temp: reading.air_temp ? parseFloat(reading.air_temp).toFixed(1) : newBoxes[boxIndex].temp,
-              humidity: reading.air_humidity ? parseFloat(reading.air_humidity).toFixed(1) : newBoxes[boxIndex].humidity
-            };
-          }
-
-          if (reading.box_id === 1 || !reading.box_id) {
-            newCurrentBox = {
-              ...newCurrentBox,
-              airTemp: reading.air_temp ? parseFloat(reading.air_temp).toFixed(1) : newCurrentBox.airTemp,
-              airHumidity: reading.air_humidity ? parseFloat(reading.air_humidity).toFixed(1) : newCurrentBox.airHumidity,
-              mediaHumidity: reading.media_humidity ? parseFloat(reading.media_humidity).toFixed(1) : newCurrentBox.mediaHumidity,
-              source: reading.source || newCurrentBox.source
-            };
-          }
-        });
-      }
-
-      setSensorData(prev => ({
-        ...prev,
-        boxes: newBoxes,
-        currentBox: newCurrentBox
-      }));
-    }
-  }, [realtimeData]);
-
-  const memoizedBoxes = useMemo(() => sensorData.boxes, [sensorData.boxes]);
+  const airTemp = primaryCard?.temp ?? '--';
+  const airHumidity = primaryCard?.humidity ?? '--';
+  const mediaHumidity = primaryCard?.mediaHumidity ?? '--';
+  const currentNumber = primaryCard?.number ?? '--';
+  const phase = primaryCard?.dominantPhase
+    || (isAdmin ? summary?.cvAnalysis?.dominantPhase : null)
+    || '--';
 
   return (
     <ErrorBoundary>
@@ -114,45 +33,75 @@ const Dashboard = () => {
         <h2 className="text-xl font-bold text-gray-800 uppercase tracking-wide">Ringkasan Dasbor</h2>
       </div>
 
-      {/* Top Boxes */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {isLoading ? (
+      {isLoading ? (
+        <BoxCardGrid count={3} className="mb-8">
           <SkeletonCard count={3} />
-        ) : (
-          memoizedBoxes.map((box) => (
-            <div key={box.id} className="bg-white/90 backdrop-blur-sm rounded-3xl p-6 shadow-soft border border-white/50 flex flex-col h-full transition-all duration-300 hover:shadow-xl hover:-translate-y-1 group">
-              <div className="flex justify-between items-center mb-6">
-                <span className="text-xs font-bold text-gray-400 tracking-wider">BOX UNIT</span>
-                <span className="text-xl font-bold text-mag-green">#{box.id}</span>
-              </div>
-              <div className="space-y-4 flex-1 flex flex-col justify-end">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center text-gray-500">
-                    <Wind size={16} className="mr-2" />
-                    <span className="text-sm">Suhu</span>
+        </BoxCardGrid>
+      ) : cards.length > 0 ? (
+        <BoxCardGrid count={cards.length} className="mb-8">
+          {cards.map((box) => {
+            const hasReading = box.temp !== '--' || box.humidity !== '--';
+
+            return (
+              <div
+                key={box.uuid || box.number}
+                className="group relative overflow-hidden flex flex-col h-full rounded-3xl border border-white/60 bg-white/90 p-6 shadow-soft backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+              >
+                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-mag-green via-emerald-400 to-lime-300 opacity-0 transition-opacity group-hover:opacity-100" />
+
+                <div className="mb-6 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Box Unit</p>
+                    <h3 className="truncate text-lg font-black text-slate-800">{box.name}</h3>
                   </div>
-                  <span className="font-semibold text-gray-800 transition-all">{box.temp}°C</span>
+                  <span className="shrink-0 rounded-2xl bg-mag-green/10 px-3 py-1.5 text-sm font-black text-mag-green">
+                    #{box.number}
+                  </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center text-gray-500">
-                    <Droplets size={16} className="mr-2" />
-                    <span className="text-sm">Kelembapan</span>
+
+                <div className="flex-1 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center text-gray-500">
+                      <Wind size={16} className="mr-2" />
+                      <span className="text-sm">Suhu</span>
+                    </div>
+                    <span className="font-semibold text-gray-800">{box.temp}°C</span>
                   </div>
-                  <span className="font-semibold text-gray-800 transition-all">{box.humidity}%</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center text-gray-500">
+                      <Droplets size={16} className="mr-2" />
+                      <span className="text-sm">Kelembapan</span>
+                    </div>
+                    <span className="font-semibold text-gray-800">{box.humidity}%</span>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4">
+                  <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <Radio size={12} className="shrink-0" />
+                    <span className="truncate">{box.source || 'Menunggu data'}</span>
+                  </span>
+                  <span className={`ml-3 h-2.5 w-2.5 shrink-0 rounded-full ${hasReading ? 'bg-emerald-500' : 'bg-slate-300'}`} />
                 </div>
               </div>
-            </div>
-          ))
-        )}
-      </div>
+            );
+          })}
+        </BoxCardGrid>
+      ) : (
+        <div className="mb-8 rounded-3xl border border-white/50 bg-white/90 p-8 text-center shadow-soft backdrop-blur-sm">
+          <BoxIcon className="mx-auto mb-3 text-slate-300" size={32} />
+          <p className="text-sm font-bold text-slate-400">Belum ada Box aktif yang terdaftar.</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Status Area */}
         <div className="lg:col-span-2 bg-white/90 backdrop-blur-sm rounded-3xl p-8 shadow-soft border border-white/50 transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center space-x-2">
               <Zap className="text-orange-400" size={20} />
-              <h3 className="font-bold text-gray-800 tracking-wide uppercase text-sm">Status Langsung Box #1</h3>
+              <h3 className="font-bold text-gray-800 tracking-wide uppercase text-sm">
+                Status Langsung{primaryCard ? ` Box #${currentNumber}` : ''}
+              </h3>
             </div>
             <div className="flex items-center space-x-2 bg-green-50 px-3 py-1 rounded-full">
               <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'} transition-colors`}></div>
@@ -163,44 +112,48 @@ const Dashboard = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div className="bg-gradient-to-br from-emerald-50 to-green-50/50 border border-emerald-100/50 rounded-2xl p-6 text-center transition-all duration-300 hover:shadow-md">
               <p className="text-xs font-black text-mag-green uppercase tracking-wider mb-2">Suhu Udara</p>
-              <p className="text-4xl font-bold text-slate-800">{sensorData.currentBox.airTemp}<span className="text-xl text-slate-400 font-medium">°C</span></p>
+              <p className="text-4xl font-bold text-slate-800">{airTemp}<span className="text-xl text-slate-400 font-medium">°C</span></p>
             </div>
             <div className="bg-gradient-to-br from-blue-50 to-sky-50/50 border border-blue-100/50 rounded-2xl p-6 text-center transition-all duration-300 hover:shadow-md">
               <p className="text-xs font-black text-blue-500 uppercase tracking-wider mb-2">Hum. Udara</p>
-              <p className="text-4xl font-bold text-slate-800">{sensorData.currentBox.airHumidity}<span className="text-xl text-slate-400 font-medium">%</span></p>
+              <p className="text-4xl font-bold text-slate-800">{airHumidity}<span className="text-xl text-slate-400 font-medium">%</span></p>
             </div>
             <div className="bg-gradient-to-br from-amber-50 to-orange-50/50 border border-orange-100/50 rounded-2xl p-6 text-center transition-all duration-300 hover:shadow-md">
               <p className="text-xs font-black text-amber-500 uppercase tracking-wider mb-2">Hum. Media</p>
-              <p className="text-4xl font-bold text-slate-800">{sensorData.currentBox.mediaHumidity}<span className="text-xl text-slate-400 font-medium">%</span></p>
+              <p className="text-4xl font-bold text-slate-800">{mediaHumidity}<span className="text-xl text-slate-400 font-medium">%</span></p>
             </div>
           </div>
 
           <div>
             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Status Aktuator</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {Object.entries(sensorData.currentBox.actuators).map(([key, value]) => (
-                <div key={key} className={`border rounded-xl p-4 flex flex-col items-center justify-center transition-all duration-300 ${value === 'ON' ? 'bg-mag-green/10 border-mag-green/30' : 'bg-gray-50 border-gray-100'}`}>
-                  {key === 'heater' && <Thermometer size={24} className={`mb-2 ${value === 'ON' ? 'text-mag-green' : 'text-gray-300'}`} />}
-                  {key === 'kipas' && <Wind size={24} className={`mb-2 ${value === 'ON' ? 'text-blue-500' : 'text-gray-300'}`} />}
-                  {key === 'pompa' && <Droplets size={24} className={`mb-2 ${value === 'ON' ? 'text-blue-400' : 'text-gray-300'}`} />}
-                  <p className={`text-xs font-bold uppercase tracking-wider transition-colors ${value === 'ON' ? 'text-gray-800' : 'text-gray-400'}`}>{key === 'heater' ? 'Pemanas' : key}</p>
-                  <p className={`text-[10px] mt-1 font-bold transition-colors ${value === 'ON' ? 'text-mag-green' : 'text-gray-300'}`}>{value}</p>
-                </div>
-              ))}
-            </div>
+            {Object.keys(actuators).length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {Object.entries(actuators).map(([key, value]) => (
+                  <div key={key} className={`border rounded-xl p-4 flex flex-col items-center justify-center transition-all duration-300 ${value === 'ON' ? 'bg-mag-green/10 border-mag-green/30' : 'bg-gray-50 border-gray-100'}`}>
+                    {key === 'heater' && <Thermometer size={24} className={`mb-2 ${value === 'ON' ? 'text-mag-green' : 'text-gray-300'}`} />}
+                    {key === 'kipas' && <Wind size={24} className={`mb-2 ${value === 'ON' ? 'text-blue-500' : 'text-gray-300'}`} />}
+                    {key === 'pompa' && <Droplets size={24} className={`mb-2 ${value === 'ON' ? 'text-blue-400' : 'text-gray-300'}`} />}
+                    <p className={`text-xs font-bold uppercase tracking-wider transition-colors ${value === 'ON' ? 'text-gray-800' : 'text-gray-400'}`}>{key === 'heater' ? 'Pemanas' : key}</p>
+                    <p className={`text-[10px] mt-1 font-bold transition-colors ${value === 'ON' ? 'text-mag-green' : 'text-gray-300'}`}>{value}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-center text-xs font-bold text-slate-400">
+                Belum ada data aktuator untuk box ini.
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Right Side Cards */}
         <div className="space-y-6">
-          {/* Prediction Card */}
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl p-8 shadow-xl text-white relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl">
             <div className="absolute -top-10 -right-10 p-4 opacity-10 transform rotate-12">
               <Sprout size={160} />
             </div>
             <h3 className="text-xs font-bold text-mag-green tracking-wider uppercase mb-6">Prediksi Panen Terdekat</h3>
             <div className="flex items-end mb-4">
-              <span className="text-6xl font-bold mr-2">{sensorData.prediction.estimatedDays}</span>
+              <span className="text-6xl font-bold mr-2">{Number.isFinite(estimatedDays) ? Math.round(estimatedDays) : '--'}</span>
               <span className="text-lg text-gray-300 mb-1">Hari Lagi</span>
             </div>
             <div className="bg-white/10 rounded-xl p-3 flex items-center mb-4 border border-white/5">
@@ -209,13 +162,12 @@ const Dashboard = () => {
               </div>
               <div>
                 <p className="text-[10px] text-gray-400 uppercase font-bold">Fase Saat Ini</p>
-                <p className="text-sm font-semibold">{sensorData.prediction.phase}</p>
+                <p className="text-sm font-semibold">{phase}</p>
               </div>
             </div>
             <p className="text-[10px] text-gray-400 italic">*Estimasi berdasarkan Computer Vision & ML</p>
           </div>
 
-          {/* System Info */}
           <div className="bg-white/90 backdrop-blur-sm rounded-3xl p-8 shadow-soft border border-white/50 transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
             <h3 className="text-xs font-black text-slate-400 tracking-wider uppercase mb-4">Informasi Sistem</h3>
             <div className="space-y-4">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Users, UserPlus, RefreshCw, Pencil, Trash2, PlusCircle, Building2, Check, X } from 'lucide-react';
 import { 
   getAllUsers, createUser, updateUser, deleteUser,
@@ -34,6 +35,16 @@ export default function ManajemenPengguna() {
   useEffect(() => {
     fetchData();
   }, [activeTab]);
+
+  // Lock background scroll while modal is open
+  useEffect(() => {
+    if (!modal.isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [modal.isOpen]);
 
   // Handle Delete
   const handleDelete = (id) => {
@@ -214,80 +225,103 @@ export default function ManajemenPengguna() {
       </div>
 
       {/* MODAL */}
-      {modal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl p-6 md:p-8 animate-in fade-in zoom-in duration-200">
-            <h2 className="text-xl font-black text-slate-800 mb-6">
-              {modal.type === 'add' ? 'Tambah' : 'Edit'} {activeTab === 'users' ? 'User' : 'Tenant'}
-            </h2>
-            
-            <form onSubmit={handleModalSubmit} className="space-y-4">
-              {activeTab === 'users' ? (
-                <>
-                  <div className="space-y-1">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Tenant ID (Opsional)</label>
-                    <input name="tenant_id" defaultValue={modal.data?.tenant_id} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Username</label>
-                    <input name="username" defaultValue={modal.data?.username} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Email*</label>
-                    <input name="email" type="email" required defaultValue={modal.data?.email} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-wider">{modal.type === 'add' ? 'Password*' : 'Password Baru (Opsional)'}</label>
-                    <input name="password" type="password" required={modal.type === 'add'} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Role*</label>
-                    <select name="role" required defaultValue={modal.data?.role} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold">
-                      <option value="pembudidaya">Pembudidaya</option>
-                      <option value="operator">Operator</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="space-y-1">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Nama Tenant*</label>
-                    <input name="name" required defaultValue={modal.data?.name} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Kode Tenant (Unik)*</label>
-                    <input name="tenant_code" required defaultValue={modal.data?.tenant_code} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Kontak Person</label>
-                    <input name="contact_person" defaultValue={modal.data?.contact_person} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-wider">No. HP</label>
-                    <input name="phone" defaultValue={modal.data?.phone} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Alamat</label>
-                    <textarea name="address" defaultValue={modal.data?.address} rows={2} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold"></textarea>
-                  </div>
-                </>
-              )}
-              
-              <div className="space-y-1 pt-2">
-                <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer">
-                  <input type="checkbox" name="is_active" value="true" defaultChecked={modal.data?.is_active ?? true} className="w-4 h-4 text-mag-green rounded focus:ring-mag-green border-gray-300" />
-                  Status Aktif
-                </label>
+      {modal.isOpen && createPortal(
+        <div
+          className="fixed inset-0 z-[100] overflow-y-auto bg-slate-900/50 backdrop-blur-sm"
+          onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+        >
+          <div className="flex min-h-full items-center justify-center p-4 sm:p-6">
+            <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] animate-in fade-in zoom-in duration-200">
+              <div className="flex items-start justify-between gap-4 px-6 md:px-8 pt-6 md:pt-8 pb-4 border-b border-slate-100">
+                <div>
+                  <h2 className="text-xl font-black text-slate-800">
+                    {modal.type === 'add' ? 'Tambah' : 'Edit'} {activeTab === 'users' ? 'User' : 'Tenant'}
+                  </h2>
+                  <p className="text-xs text-slate-400 font-medium mt-1">
+                    {activeTab === 'users' ? 'Lengkapi data akun pengguna' : 'Lengkapi data tenant'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  aria-label="Tutup"
+                  className="p-2 -mr-2 -mt-1 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
+                >
+                  <X size={18} />
+                </button>
               </div>
 
-              <div className="flex gap-3 pt-6 mt-6 border-t border-slate-100">
-                <button type="button" onClick={closeModal} className="flex-1 px-4 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-xl transition-colors">Batal</button>
-                <button type="submit" className="flex-1 px-4 py-3 bg-mag-green text-white font-bold rounded-xl hover:bg-emerald-600 transition-colors shadow-glow">Simpan</button>
-              </div>
-            </form>
+              <form onSubmit={handleModalSubmit} className="flex flex-col min-h-0 flex-1">
+                <div className="px-6 md:px-8 py-5 space-y-4 overflow-y-auto">
+                  {activeTab === 'users' ? (
+                    <>
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Tenant ID (Opsional)</label>
+                        <input name="tenant_id" defaultValue={modal.data?.tenant_id} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Username</label>
+                        <input name="username" defaultValue={modal.data?.username} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Email*</label>
+                        <input name="email" type="email" required defaultValue={modal.data?.email} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider">{modal.type === 'add' ? 'Password*' : 'Password Baru (Opsional)'}</label>
+                        <input name="password" type="password" required={modal.type === 'add'} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Role*</label>
+                        <select name="role" required defaultValue={modal.data?.role} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold">
+                          <option value="pembudidaya">Pembudidaya</option>
+                          <option value="operator">Operator</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Nama Tenant*</label>
+                        <input name="name" required defaultValue={modal.data?.name} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Kode Tenant (Unik)*</label>
+                        <input name="tenant_code" required defaultValue={modal.data?.tenant_code} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Kontak Person</label>
+                        <input name="contact_person" defaultValue={modal.data?.contact_person} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider">No. HP</label>
+                        <input name="phone" defaultValue={modal.data?.phone} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Alamat</label>
+                        <textarea name="address" defaultValue={modal.data?.address} rows={2} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold"></textarea>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="space-y-1 pt-2">
+                    <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer">
+                      <input type="checkbox" name="is_active" value="true" defaultChecked={modal.data?.is_active ?? true} className="w-4 h-4 text-mag-green rounded focus:ring-mag-green border-gray-300" />
+                      Status Aktif
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 px-6 md:px-8 py-4 border-t border-slate-100 bg-slate-50/60 rounded-b-3xl">
+                  <button type="button" onClick={closeModal} className="flex-1 px-4 py-3 text-slate-500 font-bold hover:bg-slate-100 rounded-xl transition-colors">Batal</button>
+                  <button type="submit" className="flex-1 px-4 py-3 bg-mag-green text-white font-bold rounded-xl hover:bg-emerald-600 transition-colors shadow-glow">Simpan</button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

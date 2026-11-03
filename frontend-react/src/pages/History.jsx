@@ -5,6 +5,25 @@ import {
 import { Activity, Camera, Sprout, Settings2, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+const formatTimestamp = (timestamp) => {
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('id-ID');
+};
+
+const formatBoxId = (boxId) => (
+  typeof boxId === 'string' && boxId.length > 0 ? `${boxId.substring(0, 8)}...` : '-'
+);
+
+const formatDetections = (item) => {
+  const counts = item.detection_counts && typeof item.detection_counts === 'object' ? item.detection_counts : {};
+  const baby = item.baby_larva ?? counts.baby_larva ?? 0;
+  const adult = item.adult_larva ?? counts.adult_larva ?? 0;
+  const prepupa = item.prepupa ?? counts.prepupa ?? 0;
+  const pupa = item.pupa ?? counts.pupa ?? 0;
+  const total = item.total_detected ?? counts.total_detected ?? (Number(baby) + Number(adult) + Number(prepupa) + Number(pupa));
+  return `Total ${total} • Bayi ${baby} • Dewasa ${adult} • Prepupa ${prepupa} • Pupa ${pupa}`;
+};
+
 export default function HistoryPage() {
   const [activeTab, setActiveTab] = useState('sensor');
   const [data, setData] = useState({ sensor: [], cv: [], harvest: [], actuator: [] });
@@ -113,8 +132,8 @@ export default function HistoryPage() {
                 <tr><td colSpan="6" className="text-center py-10 text-gray-400 font-medium">Belum ada data riwayat.</td></tr>
               ) : data[activeTab].map((item, idx) => (
                 <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-6 py-4 text-slate-500 font-bold">{new Date(item.timestamp).toLocaleString()}</td>
-                  <td className="px-6 py-4 text-slate-800 font-black">{item.box_id ? item.box_id.substring(0,8) + '...' : '-'}</td>
+                  <td className="px-6 py-4 text-slate-500 font-bold">{formatTimestamp(item.timestamp)}</td>
+                  <td className="px-6 py-4 text-slate-800 font-black">{formatBoxId(item.box_id)}</td>
                   
                   {activeTab === 'sensor' && (
                     <>
@@ -132,7 +151,7 @@ export default function HistoryPage() {
                       </td>
                       <td className="px-6 py-4 text-slate-700 font-semibold">{item.confidence_score}</td>
                       <td className="px-6 py-4 text-slate-500 text-xs">
-                         {item.detection_counts ? JSON.stringify(item.detection_counts) : '-'}
+                         {formatDetections(item)}
                       </td>
                     </>
                   )}
@@ -146,7 +165,7 @@ export default function HistoryPage() {
                     <>
                       <td className="px-6 py-4 text-slate-700 font-semibold uppercase">{item.type}</td>
                       <td className="px-6 py-4">
-                        {item.status ? 
+                        {String(item.status || '').toUpperCase() === 'ON' ?
                           <span className="text-mag-green font-black text-xs">ON</span> : 
                           <span className="text-slate-400 font-black text-xs">OFF</span>
                         }

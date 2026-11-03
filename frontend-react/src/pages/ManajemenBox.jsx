@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Box as BoxIcon, PlusCircle, Pencil, Trash2, RefreshCw } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Box as BoxIcon, PlusCircle, Pencil, Trash2, RefreshCw, X } from 'lucide-react';
 import { getAllBoxes, createBox, updateBox, deleteBox, getAllTenants } from '../services/api';
 import toast from 'react-hot-toast';
 
@@ -8,6 +9,8 @@ export default function ManajemenBox() {
   const [tenants, setTenants] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [modal, setModal] = useState({ isOpen: false, type: 'add', data: null });
+
+  const closeModal = () => setModal({ isOpen: false, type: 'add', data: null });
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -28,6 +31,15 @@ export default function ManajemenBox() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (!modal.isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [modal.isOpen]);
 
   const handleDelete = (id) => {
     toast((t) => (
@@ -53,7 +65,7 @@ export default function ManajemenBox() {
 
   const handleToggleActive = async (box) => {
     try {
-      await updateBox(box.id, { ...box, is_active: !box.is_active });
+      await updateBox(box.id, { is_active: !box.is_active });
       fetchData(); // refresh list
     } catch (error) {
       toast.error(error.error || 'Gagal mengubah status Box');
@@ -64,9 +76,12 @@ export default function ManajemenBox() {
     e.preventDefault();
     const formData = new FormData(e.target);
     const payload = Object.fromEntries(formData.entries());
-    
-    if (payload.is_active) {
-       payload.is_active = payload.is_active === 'true';
+
+    payload.is_active = formData.has('is_active');
+    if (payload.box_number === '') {
+      delete payload.box_number;
+    } else {
+      payload.box_number = Number(payload.box_number);
     }
 
     try {
@@ -76,7 +91,7 @@ export default function ManajemenBox() {
         await updateBox(modal.data.id, payload);
       }
       toast.success('Box berhasil disimpan');
-      setModal({ isOpen: false, type: 'add', data: null });
+      closeModal();
       fetchData();
     } catch (error) {
       toast.error(error.error || 'Gagal menyimpan Box');
@@ -123,7 +138,12 @@ export default function ManajemenBox() {
           <div key={box.id} className="bg-white/90 backdrop-blur-sm p-6 rounded-3xl shadow-soft border border-white/50 transition-all duration-300 hover:shadow-xl group">
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h3 className="text-lg font-black text-slate-800">{box.name}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-black text-slate-800">{box.name}</h3>
+                  {box.box_number !== null && box.box_number !== undefined && (
+                    <span className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-500 text-[10px] font-black">#{box.box_number}</span>
+                  )}
+                </div>
                 <p className="text-xs font-medium text-slate-500 mt-1">Tenant: {getTenantName(box.tenant_id)}</p>
               </div>
               <div className="flex gap-2">
@@ -150,41 +170,68 @@ export default function ManajemenBox() {
       </div>
 
       {/* MODAL */}
-      {modal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl p-6 md:p-8 animate-in fade-in zoom-in duration-200">
-            <h2 className="text-xl font-black text-slate-800 mb-6">
-              {modal.type === 'add' ? 'Tambah' : 'Edit'} Box
-            </h2>
-            
-            <form onSubmit={handleModalSubmit} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Nama Box*</label>
-                <input name="name" required defaultValue={modal.data?.name} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Pilih Tenant*</label>
-                <select name="tenant_id" required defaultValue={modal.data?.tenant_id} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold">
-                  <option value="">-- Pilih Tenant --</option>
-                  {tenants.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1 pt-2">
-                <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer">
-                  <input type="checkbox" name="is_active" value="true" defaultChecked={modal.data?.is_active ?? true} className="w-4 h-4 text-indigo-500 rounded focus:ring-indigo-500 border-gray-300" />
-                  Status Aktif
-                </label>
+      {modal.isOpen && createPortal(
+        <div
+          className="fixed inset-0 z-[100] overflow-y-auto bg-slate-900/50 backdrop-blur-sm"
+          onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+        >
+          <div className="flex min-h-full items-center justify-center p-4 sm:p-6">
+            <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] animate-in fade-in zoom-in duration-200">
+              <div className="flex items-start justify-between gap-4 px-6 md:px-8 pt-6 md:pt-8 pb-4 border-b border-slate-100">
+                <div>
+                  <h2 className="text-xl font-black text-slate-800">
+                    {modal.type === 'add' ? 'Tambah' : 'Edit'} Box
+                  </h2>
+                  <p className="text-xs text-slate-400 font-medium mt-1">Lengkapi data unit Box IoT</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  aria-label="Tutup"
+                  className="p-2 -mr-2 -mt-1 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
+                >
+                  <X size={18} />
+                </button>
               </div>
 
-              <div className="flex gap-3 pt-6 mt-6 border-t border-slate-100">
-                <button type="button" onClick={() => setModal({ isOpen: false, type: 'add', data: null })} className="flex-1 px-4 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-xl transition-colors">Batal</button>
-                <button type="submit" className="flex-1 px-4 py-3 bg-indigo-500 text-white font-bold rounded-xl hover:bg-indigo-600 transition-colors shadow-glow">Simpan</button>
-              </div>
-            </form>
+              <form onSubmit={handleModalSubmit} className="flex flex-col min-h-0 flex-1">
+                <div className="px-6 md:px-8 py-5 space-y-4 overflow-y-auto">
+                  <div className="space-y-1">
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Nama Box*</label>
+                    <input name="name" required defaultValue={modal.data?.name} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Nomor Box</label>
+                      <input name="box_number" type="number" min="1" defaultValue={modal.data?.box_number ?? ''} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Pilih Tenant*</label>
+                      <select name="tenant_id" required defaultValue={modal.data?.tenant_id} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold">
+                        <option value="">-- Pilih Tenant --</option>
+                        {tenants.map(t => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-1 pt-2">
+                    <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer">
+                      <input type="checkbox" name="is_active" value="true" defaultChecked={modal.data?.is_active ?? true} className="w-4 h-4 text-indigo-500 rounded focus:ring-indigo-500 border-gray-300" />
+                      Status Aktif
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 px-6 md:px-8 py-4 border-t border-slate-100 bg-slate-50/60 rounded-b-3xl">
+                  <button type="button" onClick={closeModal} className="flex-1 px-4 py-3 text-slate-500 font-bold hover:bg-slate-100 rounded-xl transition-colors">Batal</button>
+                  <button type="submit" className="flex-1 px-4 py-3 bg-indigo-500 text-white font-bold rounded-xl hover:bg-indigo-600 transition-colors shadow-glow">Simpan</button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 import { io } from "socket.io-client";
 
 const getWsUrl = () => {
+  if (import.meta.env.DEV) return undefined;
   const wsEnv = import.meta.env.VITE_WS_URL;
   if (wsEnv && wsEnv.startsWith("http")) {
     return wsEnv;

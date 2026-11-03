@@ -1,45 +1,57 @@
 import { useState, useEffect } from 'react';
-import { Save, AlertCircle, RotateCcw, Box, Thermometer, Droplets, Wind, ArrowRightLeft } from 'lucide-react';
-import { getThresholds, updateThresholds } from '../services/api';
+import { Save, AlertCircle, RotateCcw, Box, Thermometer, Droplets, Wind } from 'lucide-react';
+import { getThresholdByFloor, updateThresholds } from '../services/api';
+import { useGlobalContext } from '../context/GlobalContext';
 import toast from 'react-hot-toast';
 
-export default function Thresholds() {
-  const [activeTab, setActiveTab] = useState(1);
-  const [form, setForm] = useState({
-    tempMin: 25,
-    tempMax: 35,
-    mediaMin: 40,
-    mediaMax: 65,
-    humAirMin: 60,
-    humAirMax: 85
-  });
+const DEFAULT_FORM = {
+  tempMin: 25,
+  tempMax: 35,
+  mediaMin: 40,
+  mediaMax: 65,
+  humAirMin: 60,
+  humAirMax: 85
+};
 
+export default function Thresholds() {
+  const { user } = useGlobalContext();
+  const [activeTab, setActiveTab] = useState(1);
+  const [form, setForm] = useState(DEFAULT_FORM);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchThresholds = async () => {
+      setIsLoading(true);
       try {
-        const data = await getThresholds();
-        if (data && data.length > 0) {
-          const latest = data[data.length - 1]; // Assume the latest config
+        const threshold = await getThresholdByFloor(activeTab, user?.tenant_id);
+        if (!isMounted) return;
+
+        if (threshold) {
           setForm({
-            id: latest.id,
-            tempMin: latest.temp_min || 25,
-            tempMax: latest.temp_max || 35,
-            mediaMin: latest.media_hum_min || 40,
-            mediaMax: latest.media_hum_max || 65,
-            humAirMin: latest.air_hum_min || 60,
-            humAirMax: latest.air_hum_max || 85
+            id: threshold.id,
+            tempMin: threshold.temp_min ?? DEFAULT_FORM.tempMin,
+            tempMax: threshold.temp_max ?? DEFAULT_FORM.tempMax,
+            mediaMin: threshold.media_hum_min ?? DEFAULT_FORM.mediaMin,
+            mediaMax: threshold.media_hum_max ?? DEFAULT_FORM.mediaMax,
+            humAirMin: threshold.air_hum_min ?? DEFAULT_FORM.humAirMin,
+            humAirMax: threshold.air_hum_max ?? DEFAULT_FORM.humAirMax
           });
+        } else {
+          setForm({ ...DEFAULT_FORM });
         }
       } catch (error) {
         console.error("Gagal memuat threshold:", error);
+        if (isMounted) setForm({ ...DEFAULT_FORM });
       } finally {
-        setIsLoading(false);
+        if (isMounted) setIsLoading(false);
       }
     };
+
     fetchThresholds();
-  }, [activeTab]);
+    return () => { isMounted = false; };
+  }, [activeTab, user?.tenant_id]);
 
   const handleReset = () => {
     toast((t) => (
@@ -49,15 +61,7 @@ export default function Thresholds() {
           <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-bold transition-colors">Batal</button>
           <button onClick={() => { 
             toast.dismiss(t.id);
-            setForm({
-              ...form,
-              tempMin: 25,
-              tempMax: 35,
-              mediaMin: 40,
-              mediaMax: 65,
-              humAirMin: 60,
-              humAirMax: 85
-            });
+            setForm({ ...DEFAULT_FORM, id: form.id });
             toast.success('Pengaturan direset ke default');
           }} className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-bold transition-colors">Reset</button>
         </div>
@@ -69,20 +73,24 @@ export default function Thresholds() {
     e.preventDefault();
     const loadId = toast.loading('Menyimpan perubahan...');
     try {
-      await updateThresholds({
-        id: form.id || 1, // Default to 1 if not exists
+      const payload = {
         temp_min: parseFloat(form.tempMin),
         temp_max: parseFloat(form.tempMax),
         media_hum_min: activeTab === 4 ? null : parseFloat(form.mediaMin),
         media_hum_max: activeTab === 4 ? null : parseFloat(form.mediaMax),
         air_hum_min: parseFloat(form.humAirMin),
         air_hum_max: parseFloat(form.humAirMax),
-        tenant_id: 1, // Dummy tenant
         floor_level: activeTab
-      });
+      };
+
+      if (form.id) payload.id = form.id;
+      if (user?.tenant_id) payload.tenant_id = user.tenant_id;
+
+      const saved = await updateThresholds(payload);
+      if (saved?.id) setForm(prev => ({ ...prev, id: saved.id }));
       toast.success(`Berhasil menyimpan perubahan untuk Ruang ${activeTab}!`, { id: loadId });
     } catch (error) {
-      toast.error('Gagal menyimpan perubahan: ' + error.message, { id: loadId });
+      toast.error('Gagal menyimpan perubahan: ' + (error.error || error.message), { id: loadId });
     }
   };
 
@@ -245,53 +253,6 @@ export default function Thresholds() {
         </form>
       </div>
 
-      {/* RELOKASI BOX */}
-      <div className="bg-white/90 backdrop-blur-sm p-8 rounded-3xl shadow-soft border border-white/50 transition-all duration-300 mt-8">
-        <div className="flex items-start gap-4 mb-6">
-          <div className="p-2 bg-indigo-50 rounded-xl text-indigo-500 shrink-0">
-            <ArrowRightLeft size={20} />
-          </div>
-          <div>
-            <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">RELOKASI BOX</h4>
-            <p className="text-xs text-slate-400 font-medium mt-1">Pindahkan unit box ke ruang kandang lain. Perubahan disimpan ke database.</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Pilih Unit Box</label>
-            <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-bold text-slate-800 text-sm transition-all appearance-none cursor-pointer">
-              <option>Box 1 — Ruang 1</option>
-              <option>Box 2 — Ruang 1</option>
-              <option>Box 3 — Ruang 2</option>
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Pindah Ke Ruang</label>
-            <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-bold text-slate-800 text-sm transition-all appearance-none cursor-pointer">
-              <option>Ruang 1</option>
-              <option>Ruang 2</option>
-              <option>Ruang 3</option>
-              <option>Ruang 4</option>
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Slot (Opsional)</label>
-            <input 
-              type="text" 
-              placeholder="Contoh: A1"
-              className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-bold text-slate-800 text-sm transition-all"
-            />
-          </div>
-        </div>
-        <div className="mt-6">
-          <button className="px-8 py-3 bg-[#5D4EFA] hover:bg-[#4b3be0] text-white font-black rounded-xl flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-indigo-500/30 text-sm w-full md:w-auto">
-            <ArrowRightLeft size={16} />
-            Simpan Lokasi
-          </button>
-        </div>
-      </div>
-      
     </div>
   );
 }

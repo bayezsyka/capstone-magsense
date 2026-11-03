@@ -2,6 +2,7 @@ import axios from "axios";
 
 // Konfigurasi Base URL agar selalu mengarah ke Central Backend
 const getApiUrl = () => {
+  if (import.meta.env.DEV) return "/api";
   const envUrl = import.meta.env.VITE_API_URL;
   if (envUrl && envUrl.startsWith("http")) {
     return envUrl;
@@ -47,7 +48,7 @@ export const loginUser = async (email, password) => {
 
 export const getProfile = async () => {
   try {
-    const res = await api.get("/profile");
+    const res = await api.get("/users/profile");
     return res.data;
   } catch (e) {
     handleError(e, "Gagal memuat profil");
@@ -56,7 +57,7 @@ export const getProfile = async () => {
 
 export const updateProfile = async (data) => {
   try {
-    const res = await api.put("/profile", data);
+    const res = await api.put("/users/profile", data);
     return res.data;
   } catch (e) {
     handleError(e, "Gagal memperbarui profil");
@@ -65,7 +66,7 @@ export const updateProfile = async (data) => {
 
 export const updatePassword = async (data) => {
   try {
-    const res = await api.put("/profile/password", data);
+    const res = await api.put("/users/profile/password", data);
     return res.data;
   } catch (e) {
     handleError(e, "Gagal memperbarui password");
@@ -94,55 +95,72 @@ export const updateBox = async (id, data) => { try { const res = await api.put(`
 export const deleteBox = async (id) => { try { const res = await api.delete(`/boxes/${id}`); return res.data; } catch (e) { handleError(e, "Gagal menghapus box"); } };
 
 // 5. Automation Thresholds
-export const getAllThresholds = async () => { try { const res = await api.get("/automation-thresholds"); return res.data; } catch (e) { handleError(e, "Gagal memuat thresholds"); } };
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const getAllThresholds = async (params = {}) => { try { const res = await api.get("/automation-thresholds", { params }); return res.data; } catch (e) { handleError(e, "Gagal memuat thresholds"); } };
 export const getThresholds = getAllThresholds;
 export const getThresholdByBoxId = async (boxId) => { try { const res = await api.get(`/automation-thresholds/box/${boxId}`); return res.data; } catch (e) { handleError(e, "Gagal memuat threshold box"); } };
+export const getThresholdByFloor = async (floorLevel, tenantId) => {
+  try {
+    const res = await api.get(`/automation-thresholds/floor/${floorLevel}`, { params: tenantId ? { tenant_id: tenantId } : {} });
+    return res.data;
+  } catch (e) {
+    if (e.response?.status === 404) return null;
+    handleError(e, "Gagal memuat threshold ruang");
+  }
+};
 export const getThresholdById = async (id) => { try { const res = await api.get(`/automation-thresholds/${id}`); return res.data; } catch (e) { handleError(e, "Gagal memuat threshold"); } };
 export const createThreshold = async (data) => { try { const res = await api.post("/automation-thresholds", data); return res.data; } catch (e) { handleError(e, "Gagal membuat threshold"); } };
 export const updateThreshold = async (id, data) => { try { const res = await api.put(`/automation-thresholds/${id}`, data); return res.data; } catch (e) { handleError(e, "Gagal update threshold"); } };
 export const updateThresholds = async (data) => {
-  try {
-    const id = data.id || 1;
-    const res = await api.put(`/automation-thresholds/${id}`, data);
-    return res.data;
-  } catch (e) {
-    if (e.response?.status === 404) {
-      return await createThreshold(data);
+  const payload = { ...data };
+  const id = payload.id;
+
+  if (UUID_PATTERN.test(String(id || ""))) {
+    try {
+      const res = await api.put(`/automation-thresholds/${id}`, payload);
+      return res.data;
+    } catch (e) {
+      if (e.response?.status !== 404) {
+        handleError(e, "Gagal update threshold");
+      }
     }
-    handleError(e, "Gagal update threshold");
   }
-};
-export const saveThreshold = async (id, data) => {
-  try {
-    const res = await api.put(`/automation-thresholds/${id}`, data);
-    return res.data;
-  } catch (e) {
-    if (e.response?.status === 404) {
-      const createRes = await api.post("/automation-thresholds", { ...data, box_id: id });
-      return createRes.data;
+
+  if (payload.floor_level !== undefined && payload.floor_level !== null) {
+    try {
+      const res = await api.put(`/automation-thresholds/floor/${payload.floor_level}`, payload);
+      return res.data;
+    } catch (e) {
+      handleError(e, "Gagal menyimpan threshold");
     }
-    handleError(e, "Gagal menyimpan threshold");
   }
+
+  return createThreshold(payload);
 };
+export const saveThreshold = async (id, data) => updateThresholds({ ...data, id });
 export const deleteThreshold = async (id) => { try { const res = await api.delete(`/automation-thresholds/${id}`); return res.data; } catch (e) { handleError(e, "Gagal menghapus threshold"); } };
 
 // 6. Sensor & Actuator Data
-export const getAllSensorData = async () => { try { const res = await api.get("/sensor-data"); return res.data; } catch (e) { handleError(e, "Gagal memuat sensor data"); } };
+export const getAllSensorData = async (params = {}) => { try { const res = await api.get("/sensor-data", { params }); return res.data; } catch (e) { handleError(e, "Gagal memuat sensor data"); } };
 export const getSensorData = getAllSensorData;
-export const getLatestSensorData = async () => { try { const res = await api.get("/sensor-data/latest"); return res.data; } catch (e) { handleError(e, "Gagal memuat sensor latest"); } };
+export const getLatestSensorData = async (boxId) => { try { const res = await api.get("/sensor-data/latest", { params: boxId ? { box_id: boxId } : {} }); return res.data; } catch (e) { handleError(e, "Gagal memuat sensor latest"); } };
 export const deleteSensorData = async (id) => { try { const res = await api.delete(`/sensor-data/${id}`); return res.data; } catch (e) { handleError(e, "Gagal menghapus sensor data"); } };
 
-export const getAllCvResults = async () => { try { const res = await api.get("/cv-results"); return res.data; } catch (e) { handleError(e, "Gagal memuat CV results"); } };
+export const getAllCvResults = async (params = {}) => { try { const res = await api.get("/cv-results", { params }); return res.data; } catch (e) { handleError(e, "Gagal memuat CV results"); } };
 export const getCvResults = getAllCvResults;
+export const getLatestCvResult = async (boxId) => { try { const res = await api.get("/cv-results/latest", { params: boxId ? { box_id: boxId } : {} }); return res.data; } catch (e) { handleError(e, "Gagal memuat CV latest"); } };
 export const deleteCvResult = async (id) => { try { const res = await api.delete(`/cv-results/${id}`); return res.data; } catch (e) { handleError(e, "Gagal menghapus CV result"); } };
 export const scanFrameCv = async (payload) => { try { const res = await api.post("/cv-results/scan-frame", payload); return res.data; } catch (e) { handleError(e, "Gagal memindai frame kamera"); } };
 
-export const getAllActuatorLogs = async () => { try { const res = await api.get("/actuator-logs"); return res.data; } catch (e) { handleError(e, "Gagal memuat actuator logs"); } };
+export const getAllActuatorLogs = async (params = {}) => { try { const res = await api.get("/actuator-logs", { params }); return res.data; } catch (e) { handleError(e, "Gagal memuat actuator logs"); } };
 export const getActuatorLogs = getAllActuatorLogs;
+export const getLatestActuatorLogs = async (boxId) => { try { const res = await api.get("/actuator-logs/latest", { params: boxId ? { box_id: boxId } : {} }); return res.data; } catch (e) { handleError(e, "Gagal memuat actuator latest"); } };
 export const deleteActuatorLog = async (id) => { try { const res = await api.delete(`/actuator-logs/${id}`); return res.data; } catch (e) { handleError(e, "Gagal menghapus actuator log"); } };
 
-export const getAllHarvestPredictions = async () => { try { const res = await api.get("/harvest-predictions"); return res.data; } catch (e) { handleError(e, "Gagal memuat harvest predictions"); } };
+export const getAllHarvestPredictions = async (params = {}) => { try { const res = await api.get("/harvest-predictions", { params }); return res.data; } catch (e) { handleError(e, "Gagal memuat harvest predictions"); } };
 export const getPredictions = getAllHarvestPredictions;
+export const getLatestHarvestPrediction = async (boxId) => { try { const res = await api.get("/harvest-predictions/latest", { params: boxId ? { box_id: boxId } : {} }); return res.data; } catch (e) { handleError(e, "Gagal memuat prediksi panen terbaru"); } };
 export const deleteHarvestPrediction = async (id) => { try { const res = await api.delete(`/harvest-predictions/${id}`); return res.data; } catch (e) { handleError(e, "Gagal menghapus harvest prediction"); } };
 
 export const getAllBoxLocations = async () => { try { const res = await api.get("/box-locations"); return res.data; } catch (e) { handleError(e, "Gagal memuat box locations"); } };
@@ -150,13 +168,23 @@ export const deleteBoxLocation = async (id) => { try { const res = await api.del
 
 // 7. Notifications
 export const getAllNotifications = async () => { try { const res = await api.get("/notifications"); return res.data; } catch (e) { handleError(e, "Gagal memuat notifikasi"); } };
+export const createNotification = async (data) => { try { const res = await api.post("/notifications", data); return res.data; } catch (e) { handleError(e, "Gagal membuat notifikasi"); } };
 export const markNotificationAsRead = async (id) => { try { const res = await api.put(`/notifications/${id}/read`); return res.data; } catch (e) { handleError(e, "Gagal update notifikasi"); } };
 export const deleteNotification = async (id) => { try { const res = await api.delete(`/notifications/${id}`); return res.data; } catch (e) { handleError(e, "Gagal menghapus notifikasi"); } };
 
 // 8. Dashboard & History
 export const getDashboardSummary = async () => { try { const res = await api.get("/dashboard/summary"); return res.data; } catch (e) { handleError(e, "Gagal memuat ringkasan dashboard"); } };
-export const getSensorHistory = async (boxId = "") => { try { const url = boxId ? `/boxes/${boxId}/sensor-history` : "/edge-sync/history"; const res = await api.get(url); return res.data; } catch (e) { handleError(e, "Gagal memuat riwayat sensor"); } };
-export const getHistoryData = async () => { try { const res = await api.get("/sensor-data/history"); return res.data; } catch (e) { handleError(e, "Gagal memuat riwayat data"); } };
+export const getSensorHistory = async (boxId = "", hours = 24) => {
+  try {
+    const params = { hours };
+    if (boxId) params.box_id = boxId;
+    const res = await api.get("/sensor-data/history", { params });
+    return res.data;
+  } catch (e) {
+    handleError(e, "Gagal memuat riwayat sensor");
+  }
+};
+export const getHistoryData = async (hours = 24) => { try { const res = await api.get("/sensor-data/history", { params: { hours } }); return res.data; } catch (e) { handleError(e, "Gagal memuat riwayat data"); } };
 
 export const getAllAutomationThresholds = getAllThresholds;
 

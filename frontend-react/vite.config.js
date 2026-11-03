@@ -4,6 +4,27 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    host: '127.0.0.1',
+    port: 5173,
+    proxy: {
+      '/api': {
+        target: 'https://api-capstone.sangkolo.my.id',
+        changeOrigin: true,
+        headers: {
+          Origin: 'http://localhost:3000'
+        }
+      },
+      '/socket.io': {
+        target: 'https://api-capstone.sangkolo.my.id',
+        ws: true,
+        changeOrigin: true,
+        headers: {
+          Origin: 'http://localhost:3000'
+        }
+      }
+    }
+  },
   plugins: [
     react(),
     VitePWA({
