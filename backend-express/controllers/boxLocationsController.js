@@ -2,7 +2,7 @@ const pool = require('../db');
 
 exports.getAllBoxLocations = async (req, res) => {
     try {
-        const { rows } = await pool.query('SELECT id, box_id, floor_level, created_at FROM box_locations ORDER BY timestamp DESC LIMIT 100');
+        const { rows } = await pool.query('SELECT id, box_id, floor_level, created_at FROM box_locations ORDER BY created_at DESC LIMIT 100');
         res.json(rows);
     } catch (err) {
         console.error(err);

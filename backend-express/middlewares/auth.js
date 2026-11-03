@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { JWT_SECRET } = require('../config');
 
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -15,7 +16,7 @@ const verifyToken = (req, res, next) => {
     }
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'REDACTED_JWT_SECRET');
+        const decoded = jwt.verify(token, JWT_SECRET);
         req.user = decoded; // Menyimpan payload JWT ke dalam req.user
         next();
     } catch (err) {

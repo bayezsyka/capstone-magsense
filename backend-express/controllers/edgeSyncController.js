@@ -22,6 +22,30 @@ function resolveBoxId(input) {
     return BOX_UUID_MAP[1];
 }
 
+exports.getSyncHistory = async (req, res) => {
+    try {
+        const hours = Math.min(Math.max(parseInt(req.query.hours, 10) || 24, 1), 720);
+        const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 1000, 1), 5000);
+
+        const params = [hours, limit];
+        let query = `SELECT id, box_id, air_temp, air_humidity, media_humidity, raw_soil_adc, source, timestamp
+                     FROM sensor_data
+                     WHERE timestamp >= NOW() - ($1 * INTERVAL '1 hour')`;
+
+        if (req.query.box_id !== undefined && req.query.box_id !== '') {
+            params.push(resolveBoxId(req.query.box_id));
+            query += ` AND box_id = $${params.length}::uuid`;
+        }
+
+        query += ' ORDER BY timestamp ASC LIMIT $2';
+        const { rows } = await pool.query(query, params);
+        res.json(rows);
+    } catch (err) {
+        console.error('[EDGE SYNC HISTORY ERROR]', err);
+        res.status(500).json({ error: 'Failed to fetch edge sync history' });
+    }
+};
+
 exports.syncData = async (req, res) => {
     const { sensor_data, cv_results, actuator_logs, harvest_predictions } = req.body;
     const client = await pool.connect();

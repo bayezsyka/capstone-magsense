@@ -1,15 +1,22 @@
 const fs = require('fs');
 const path = require('path');
 
+// DEPRECATED: bootstrap helper only. Controllers now contain richer CRUD logic,
+// so refuse to overwrite them unless explicitly forced.
+if (!process.argv.includes('--force')) {
+    console.error('Refusing to overwrite existing controllers/routes. Re-run with --force if you really intend to regenerate them.');
+    process.exit(1);
+}
+
 const controllersDir = path.join(__dirname, 'controllers');
 const routesDir = path.join(__dirname, 'routes');
 
 const endpoints = [
-    { name: 'sensorData', table: 'sensor_data', columns: 'id, box_id, air_temp, air_humidity, media_humidity, timestamp', routerName: 'sensor_data' },
-    { name: 'actuatorLogs', table: 'actuator_logs', columns: 'id, box_id, type, status, timestamp', routerName: 'actuator_logs' },
-    { name: 'cvResults', table: 'cv_results', columns: 'id, box_id, dominant_phase, confidence_score, detection_counts, timestamp', routerName: 'cv_results' },
-    { name: 'harvestPredictions', table: 'harvest_predictions', columns: 'id, box_id, estimated_days, urgency_level, timestamp', routerName: 'harvest_predictions' },
-    { name: 'boxLocations', table: 'box_locations', columns: 'id, box_id, floor_level, created_at', routerName: 'box_locations' }
+    { name: 'sensorData', table: 'sensor_data', columns: 'id, box_id, air_temp, air_humidity, media_humidity, timestamp', routerName: 'sensor_data', orderBy: 'timestamp' },
+    { name: 'actuatorLogs', table: 'actuator_logs', columns: 'id, box_id, type, status, timestamp', routerName: 'actuator_logs', orderBy: 'timestamp' },
+    { name: 'cvResults', table: 'cv_results', columns: 'id, box_id, dominant_phase, confidence_score, detection_counts, timestamp', routerName: 'cv_results', orderBy: 'timestamp' },
+    { name: 'harvestPredictions', table: 'harvest_predictions', columns: 'id, box_id, estimated_days, urgency_level, timestamp', routerName: 'harvest_predictions', orderBy: 'timestamp' },
+    { name: 'boxLocations', table: 'box_locations', columns: 'id, box_id, floor_level, created_at', routerName: 'box_locations', orderBy: 'created_at' }
 ];
 
 endpoints.forEach(ep => {
@@ -20,7 +27,7 @@ endpoints.forEach(ep => {
 
 exports.getAll${CapitalName} = async (req, res) => {
     try {
-        const { rows } = await pool.query('SELECT ${ep.columns} FROM ${ep.table} ORDER BY timestamp DESC LIMIT 100');
+        const { rows } = await pool.query('SELECT ${ep.columns} FROM ${ep.table} ORDER BY ${ep.orderBy || 'timestamp'} DESC LIMIT 100');
         res.json(rows);
     } catch (err) {
         console.error(err);

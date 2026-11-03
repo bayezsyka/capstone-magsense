@@ -3,6 +3,7 @@ const router = express.Router();
 const boxesController = require('../controllers/boxesController');
 
 router.get('/', boxesController.getAllBoxes);
+router.get('/:id/sensor-history', boxesController.getBoxSensorHistory);
 router.get('/:id', boxesController.getBoxById);
 router.post('/', boxesController.createBox);
 router.put('/:id', boxesController.updateBox);

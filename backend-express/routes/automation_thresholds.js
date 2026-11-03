@@ -5,6 +5,9 @@ const thresholdsController = require('../controllers/automationThresholdsControl
 const { schemas, validate } = require('../middlewares/validation');
 
 router.get('/', thresholdsController.getAllThresholds);
+router.get('/box/:boxId', thresholdsController.getThresholdByBox);
+router.get('/floor/:floorLevel', thresholdsController.getThresholdByFloor);
+router.put('/floor/:floorLevel', validate(schemas.automationThreshold), thresholdsController.upsertThresholdByFloor);
 router.get('/:id', thresholdsController.getThresholdById);
 router.post('/', validate(schemas.automationThreshold), thresholdsController.createThreshold);
 router.put('/:id', validate(schemas.automationThreshold), thresholdsController.updateThreshold);

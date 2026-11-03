@@ -1,6 +1,7 @@
 const pool = require('../db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { JWT_SECRET } = require('../config');
 
 // Login User
 exports.loginUser = async (req, res) => {
@@ -26,7 +27,7 @@ exports.loginUser = async (req, res) => {
         }
         const token = jwt.sign(
             { id: user.id, username: user.username, role: user.role, tenant_id: user.tenant_id },
-            process.env.JWT_SECRET || 'secret123',
+            JWT_SECRET,
             { expiresIn: '1d' }
         );
         res.json({ token, user: { id: user.id, username: user.username, email: user.email, role: user.role, tenant_id: user.tenant_id } });

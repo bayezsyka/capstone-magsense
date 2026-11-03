@@ -1,12 +1,96 @@
 const pool = require('../db');
+const { resolveBoxId } = require('../utils/resolveIds');
+
+const CV_COLUMNS = 'id, box_id, image_url, dominant_phase, confidence_score, detection_counts, proportions, source, timestamp';
+const DETECTION_KEYS = ['baby_larva', 'adult_larva', 'prepupa', 'pupa'];
+
+function toNumber(value) {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : 0;
+}
+
+function flattenCvRow(row) {
+    if (!row) return row;
+    const counts = row.detection_counts && typeof row.detection_counts === 'object' ? row.detection_counts : {};
+    const flattened = {
+        baby_larva: toNumber(counts.baby_larva ?? counts.babyLarva ?? row.baby_larva),
+        adult_larva: toNumber(counts.adult_larva ?? counts.adultLarva ?? row.adult_larva),
+        prepupa: toNumber(counts.prepupa ?? row.prepupa),
+        pupa: toNumber(counts.pupa ?? row.pupa)
+    };
+    const total = counts.total_detected ?? counts.total ?? row.total_detected;
+    flattened.total_detected = total !== undefined ? toNumber(total) : DETECTION_KEYS.reduce((sum, key) => sum + flattened[key], 0);
+
+    return { ...row, ...flattened };
+}
+
+function buildDetectionCounts(body) {
+    const counts = body.detection_counts && typeof body.detection_counts === 'object' ? { ...body.detection_counts } : {};
+    DETECTION_KEYS.forEach(key => {
+        if (body[key] !== undefined) counts[key] = toNumber(body[key]);
+    });
+    return counts;
+}
 
 exports.getAllCvResults = async (req, res) => {
     try {
-        const { rows } = await pool.query('SELECT id, box_id, dominant_phase, confidence_score, detection_counts, source, timestamp FROM cv_results ORDER BY timestamp DESC LIMIT 100');
-        res.json(rows);
+        const { rows } = await pool.query(`SELECT ${CV_COLUMNS} FROM cv_results ORDER BY timestamp DESC LIMIT 100`);
+        res.json(rows.map(flattenCvRow));
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Failed to fetch cv_results' });
+    }
+};
+
+exports.getLatestCvResult = async (req, res) => {
+    try {
+        const { box_id } = req.query;
+        const params = [];
+        let query = `SELECT ${CV_COLUMNS} FROM cv_results`;
+
+        if (box_id !== undefined && box_id !== '') {
+            params.push(resolveBoxId(box_id));
+            query += ' WHERE box_id = $1::uuid';
+        }
+
+        query += ' ORDER BY timestamp DESC LIMIT 1';
+        const { rows } = await pool.query(query, params);
+        res.json(rows[0] ? flattenCvRow(rows[0]) : null);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to fetch latest cv_result' });
+    }
+};
+
+exports.createCvResult = async (req, res) => {
+    try {
+        const { box_id, image_url, dominant_phase, confidence_score, proportions, source, timestamp } = req.body;
+        const detectionCounts = buildDetectionCounts(req.body);
+
+        const { rows } = await pool.query(
+            `INSERT INTO cv_results (id, box_id, image_url, dominant_phase, confidence_score, detection_counts, proportions, source, "timestamp")
+             VALUES (gen_random_uuid(), $1::uuid, $2, $3, $4, $5::jsonb, $6::jsonb, $7, COALESCE($8::timestamp, CURRENT_TIMESTAMP))
+             RETURNING ${CV_COLUMNS}`,
+            [
+                resolveBoxId(box_id),
+                image_url || null,
+                dominant_phase || null,
+                confidence_score ?? null,
+                JSON.stringify(detectionCounts),
+                JSON.stringify(proportions || {}),
+                source || 'real',
+                timestamp || null
+            ]
+        );
+
+        const flattened = flattenCvRow(rows[0]);
+        const io = req.app.get('io');
+        if (io) io.emit('new_cv_results', [flattened]);
+
+        res.status(201).json(flattened);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to create cv_result' });
     }
 };
 
@@ -141,3 +225,5 @@ exports.scanFrame = async (req, res) => {
         return res.status(500).json({ error: err.message || 'Internal error in scanFrame' });
     }
 };
+
+exports.flattenCvRow = flattenCvRow;

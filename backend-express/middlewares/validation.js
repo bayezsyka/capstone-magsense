@@ -46,8 +46,8 @@ const schemas = {
   // Schema for Automation Thresholds Update
   automationThreshold: Joi.object({
     id: Joi.alternatives().try(Joi.string().uuid(), Joi.number()).optional().allow(null, ""),
-    tenant_id: Joi.alternatives().try(Joi.string().uuid(), Joi.number()).required(),
-    floor_level: Joi.number().integer().required(),
+    tenant_id: Joi.alternatives().try(Joi.string().uuid(), Joi.number()).optional().allow(null, ""),
+    floor_level: Joi.number().integer().optional(),
     temp_min: Joi.number().required(),
     temp_max: Joi.number().required(),
     air_hum_min: Joi.number().required(),
