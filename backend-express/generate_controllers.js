@@ -15,8 +15,7 @@ const endpoints = [
     { name: 'sensorData', table: 'sensor_data', columns: 'id, box_id, air_temp, air_humidity, media_humidity, timestamp', routerName: 'sensor_data', orderBy: 'timestamp' },
     { name: 'actuatorLogs', table: 'actuator_logs', columns: 'id, box_id, type, status, timestamp', routerName: 'actuator_logs', orderBy: 'timestamp' },
     { name: 'cvResults', table: 'cv_results', columns: 'id, box_id, dominant_phase, confidence_score, detection_counts, timestamp', routerName: 'cv_results', orderBy: 'timestamp' },
-    { name: 'harvestPredictions', table: 'harvest_predictions', columns: 'id, box_id, estimated_days, urgency_level, timestamp', routerName: 'harvest_predictions', orderBy: 'timestamp' },
-    { name: 'boxLocations', table: 'box_locations', columns: 'id, box_id, floor_level, created_at', routerName: 'box_locations', orderBy: 'created_at' }
+    { name: 'harvestPredictions', table: 'harvest_predictions', columns: 'id, box_id, estimated_days, urgency_level, timestamp', routerName: 'harvest_predictions', orderBy: 'timestamp' }
 ];
 
 endpoints.forEach(ep => {

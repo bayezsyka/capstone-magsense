@@ -64,7 +64,6 @@ const sensorDataRoutes = require('./routes/sensor_data');
 const actuatorLogsRoutes = require('./routes/actuator_logs');
 const cvResultsRoutes = require('./routes/cv_results');
 const harvestPredictionsRoutes = require('./routes/harvest_predictions');
-const boxLocationsRoutes = require('./routes/box_locations');
 const notificationsRoutes = require('./routes/notifications');
 const usersController = require('./controllers/usersController');
 const dashboardRoutes = require('./routes/dashboard');
@@ -78,7 +77,6 @@ app.use('/api/sensor-data', verifyToken, sensorDataRoutes);
 app.use('/api/actuator-logs', verifyToken, actuatorLogsRoutes);
 app.use('/api/cv-results', verifyToken, cvResultsRoutes);
 app.use('/api/harvest-predictions', verifyToken, harvestPredictionsRoutes);
-app.use('/api/box-locations', verifyToken, boxLocationsRoutes);
 app.use('/api/notifications', verifyToken, notificationsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 

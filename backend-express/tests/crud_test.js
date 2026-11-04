@@ -375,12 +375,6 @@ const main = async () => {
     assert(Number(updateResult.data?.temp_min) === 26, 'threshold tidak terupdate');
   });
 
-  await test('list box locations without error', async () => {
-    const result = await request('GET', '/box-locations');
-    expectStatus(result, 200, 'get box locations');
-    assert(Array.isArray(result.data), 'box locations bukan array');
-  });
-
   await test('get edge sync history', async () => {
     const result = await request('GET', '/edge-sync/history?hours=24');
     expectStatus(result, 200, 'get edge sync history');
