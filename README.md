@@ -13,7 +13,7 @@ cd capstone-magsense
 cp .env.example .env
 ```
 
-File `.env` default sudah disiapkan supaya bisa langsung dipakai di Docker.
+Isi `.env` dengan password database dan `JWT_SECRET` yang kuat. File `.env` tidak boleh di-commit.
 
 2. **Jalankan semua service**
 
@@ -39,18 +39,26 @@ Docker akan otomatis menjalankan:
 http://localhost:3000
 ```
 
-Akun login default:
+Akun tidak lagi di-seed dengan password default. Buat admin pertama dan simpan password yang ditampilkan sekali oleh script:
 
-```text
-Admin
-admin@example.com / REDACTED
-atau
-admin@example.com / REDACTED
+```bash
+docker compose exec backend node scripts/seed-admin.js admin@example.com
+```
 
-Operator
-operator@example.com / REDACTED
-atau
-operator@example.com / REDACTED
+Untuk merotasi password akun yang sudah ada:
+
+```bash
+docker compose exec backend node scripts/reset-password.js admin@example.com
+```
+
+Jangan gunakan kredensial demo di production. Setelah merotasi password, rotasi juga `JWT_SECRET` agar semua sesi lama tidak valid.
+
+Untuk test API, gunakan database dan akun test terpisah:
+
+```bash
+cd backend-express
+cp ../.env.test.example .env.test
+npm run test:api
 ```
 
 Kalau cuma mau fokus ke bagian tertentu:

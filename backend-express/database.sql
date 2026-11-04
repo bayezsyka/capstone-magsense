@@ -119,16 +119,8 @@ VALUES
 ('00000000-0000-0000-0000-000000000001', 'MagSense Smart Farm', 'MAG-01', 'Farros', '08123456789', 'Brebes', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Default Users:
--- Admin: admin@example.com (REDACTED), admin@example.com (REDACTED)
--- Operator: operator@example.com (REDACTED), operator@example.com (REDACTED)
-INSERT INTO public.users (id, tenant_id, username, email, password, role, is_active)
-VALUES 
-('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Admin Maggot', 'admin@maggott.com', 'REDACTED_BCRYPT_HASH', 'admin', true),
-('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 'Admin Capstone', 'admin@capstone.com', 'REDACTED_BCRYPT_HASH', 'admin', true),
-('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001', 'Operator Maggot', 'operator@maggott.com', 'REDACTED_BCRYPT_HASH', 'operator', true),
-('00000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000001', 'Operator Capstone', 'operator@capstone.com', 'REDACTED_BCRYPT_HASH', 'operator', true)
-ON CONFLICT (id) DO NOTHING;
+-- Users are not seeded with default credentials.
+-- Create the first admin securely with: node scripts/seed-admin.js
 
 -- Default Boxes (Box 1: Chamber Larva, Box 2: Chamber Lalat, Box 3: Chamber Cadangan)
 INSERT INTO public.boxes (id, tenant_id, name, box_number, is_active)

@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const usersController = require('../controllers/usersController');
 const { verifyToken, requireAdmin } = require('../middlewares/auth');
+const { loginRateLimit } = require('../middlewares/loginRateLimit');
 const { schemas, validate } = require('../middlewares/validation');
 
-router.post('/login', validate(schemas.userLogin), usersController.loginUser);
+router.post('/login', loginRateLimit, validate(schemas.userLogin), usersController.loginUser);
 
 // Profile endpoints (for authenticated user)
 router.get('/profile', verifyToken, usersController.getProfile);

@@ -2,6 +2,7 @@ const pool = require('../db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../config');
+const { clearLoginAttempts } = require('../middlewares/loginRateLimit');
 
 // Login User
 exports.loginUser = async (req, res) => {
@@ -30,6 +31,9 @@ exports.loginUser = async (req, res) => {
             JWT_SECRET,
             { expiresIn: '1d' }
         );
+        clearLoginAttempts(user.email);
+        pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id])
+            .catch((err) => console.error('Failed to update last_login:', err));
         res.json({ token, user: { id: user.id, username: user.username, email: user.email, role: user.role, tenant_id: user.tenant_id } });
     } catch (err) {
         console.error('Login error:', err);
@@ -95,8 +99,8 @@ exports.updatePassword = async (req, res) => {
         if (!currentPassword || !newPassword) {
             return res.status(400).json({ error: 'Password saat ini dan password baru wajib diisi' });
         }
-        if (newPassword.length < 6) {
-            return res.status(400).json({ error: 'Password baru minimal 6 karakter' });
+        if (newPassword.length < 12) {
+            return res.status(400).json({ error: 'Password baru minimal 12 karakter' });
         }
         const userRes = await pool.query('SELECT password FROM users WHERE id = $1', [userId]);
         if (userRes.rows.length === 0) {

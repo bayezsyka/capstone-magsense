@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node tests/crud_test.js"
+    "test": "node tests/crud_test.js",
+    "test:api": "node --env-file=.env.test tests/crud_test.js",
+    "seed:admin": "node scripts/seed-admin.js",
+    "reset:password": "node scripts/reset-password.js"
   },
   "keywords": [],
   "author": "",

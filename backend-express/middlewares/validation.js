@@ -11,8 +11,8 @@ const schemas = {
       "string.email": "Format email tidak valid",
       "any.required": "Email wajib diisi"
     }),
-    password: Joi.string().min(6).required().messages({
-      "string.min": "Password minimal 6 karakter",
+    password: Joi.string().min(12).required().messages({
+      "string.min": "Password minimal 12 karakter",
       "any.required": "Password wajib diisi"
     }),
     role: Joi.string().valid("Admin", "Pembudidaya", "Operator", "admin", "pembudidaya", "operator", "user").optional().default("pembudidaya"),
@@ -29,8 +29,8 @@ const schemas = {
     email: Joi.string().email().optional().messages({
       "string.email": "Format email tidak valid"
     }),
-    password: Joi.string().min(6).optional().allow(null, "").messages({
-      "string.min": "Password minimal 6 karakter"
+    password: Joi.string().min(12).optional().allow(null, "").messages({
+      "string.min": "Password minimal 12 karakter"
     }),
     role: Joi.string().valid("Admin", "Pembudidaya", "Operator", "admin", "pembudidaya", "operator", "user").optional(),
     tenant_id: Joi.string().uuid().optional().allow(null, ""),

@@ -269,7 +269,7 @@ export default function ManajemenPengguna() {
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-black text-slate-500 uppercase tracking-wider">{modal.type === 'add' ? 'Password*' : 'Password Baru (Opsional)'}</label>
-                        <input name="password" type="password" required={modal.type === 'add'} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
+                        <input name="password" type="password" required={modal.type === 'add'} minLength={12} placeholder="Minimal 12 karakter" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-mag-green outline-none text-sm font-bold" />
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Role*</label>

@@ -1,8 +1,28 @@
 const BASE_URL = (process.env.API_URL || 'http://localhost:5000/api').replace(/\/+$/, '');
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@capstone.com';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-const OPERATOR_EMAIL = process.env.OPERATOR_EMAIL || 'operator@capstone.com';
-const OPERATOR_PASSWORD = process.env.OPERATOR_PASSWORD;
+const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD;
+const OPERATOR_EMAIL = process.env.TEST_OPERATOR_EMAIL;
+const OPERATOR_PASSWORD = process.env.TEST_OPERATOR_PASSWORD;
+
+const missingTestCredentials = [
+  ['TEST_ADMIN_EMAIL', ADMIN_EMAIL],
+  ['TEST_ADMIN_PASSWORD', ADMIN_PASSWORD],
+  ['TEST_OPERATOR_EMAIL', OPERATOR_EMAIL],
+  ['TEST_OPERATOR_PASSWORD', OPERATOR_PASSWORD]
+].filter(([, value]) => !value).map(([name]) => name);
+
+if (missingTestCredentials.length > 0) {
+  console.error('Missing required test credentials:', missingTestCredentials.join(', '));
+  console.error('Use dedicated test accounts, never production accounts.');
+  process.exit(1);
+}
+
+const isLocalApi = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test(BASE_URL);
+if (!isLocalApi && process.env.ALLOW_REMOTE_TEST !== 'true') {
+  console.error(`Refusing to run destructive tests against non-local API: ${BASE_URL}`);
+  console.error('Set ALLOW_REMOTE_TEST=true only for an isolated test environment.');
+  process.exit(1);
+}
 
 let passed = 0;
 let failed = 0;
@@ -149,7 +169,7 @@ const main = async () => {
       body: {
         username: `testuser${suffix}`,
         email: `testuser${suffix}@example.com`,
-        password: 'password123',
+        password: 'test-password-123',
         role: 'Operator',
         tenant_id: tenantId,
         is_active: true

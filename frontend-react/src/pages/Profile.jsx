@@ -95,8 +95,8 @@ export default function Profile() {
       showNotification('error', 'Semua kolom kata sandi wajib diisi');
       return;
     }
-    if (newPassword.length < 6) {
-      showNotification('error', 'Kata sandi baru minimal harus 6 karakter');
+    if (newPassword.length < 12) {
+      showNotification('error', 'Kata sandi baru minimal harus 12 karakter');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -234,7 +234,7 @@ export default function Profile() {
                 value={passwordData.newPassword}
                 onChange={handlePasswordChange}
                 className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-sm font-bold focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-mag-green transition-all"
-                placeholder="Minimal 6 karakter"
+                placeholder="Minimal 12 karakter"
               />
             </div>
             <div>

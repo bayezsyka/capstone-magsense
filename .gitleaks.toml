@@ -1,0 +1,18 @@
+title = "MagSense gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Template files and generated dependencies"
+paths = [
+  '''(^|/)\.env\.example$''',
+  '''(^|/)\.env\.test\.example$''',
+  '''(^|/)node_modules/''',
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)pgdata/'''
+]
+regexes = [
+  '''YOUR_[A-Z_]+''',
+  '''CHANGE_ME_[A-Z_]+'''
+]
