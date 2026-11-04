@@ -4,6 +4,7 @@ import { io } from "socket.io-client";
 const GlobalContext = createContext();
 
 const getSocketUrl = () => {
+  if (import.meta.env.DEV) return undefined;
   const wsEnv = import.meta.env.VITE_WS_URL;
   if (wsEnv && wsEnv.startsWith("http")) {
     return wsEnv;
@@ -43,6 +44,7 @@ export const GlobalProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [realtimeData, setRealtimeData] = useState(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
 
   useEffect(() => {
     // Connect to Central WebSocket Server
@@ -64,9 +66,15 @@ export const GlobalProvider = ({ children }) => {
       setIsConnected(false);
     });
 
+    const bumpRefresh = () => setRefreshVersion((version) => version + 1);
+
     newSocket.on("new_sensor_data", (data) => {
       setRealtimeData(data);
     });
+    newSocket.on("new_harvest_predictions", bumpRefresh);
+    newSocket.on("new_cv_results", bumpRefresh);
+    newSocket.on("new_actuator_logs", bumpRefresh);
+    newSocket.on("cv_update", bumpRefresh);
 
     setSocket(newSocket);
 
@@ -74,6 +82,10 @@ export const GlobalProvider = ({ children }) => {
       newSocket.off("connect");
       newSocket.off("disconnect");
       newSocket.off("new_sensor_data");
+      newSocket.off("new_harvest_predictions");
+      newSocket.off("new_cv_results");
+      newSocket.off("new_actuator_logs");
+      newSocket.off("cv_update");
       newSocket.disconnect();
     };
   }, [token]);
@@ -85,7 +97,8 @@ export const GlobalProvider = ({ children }) => {
     logout,
     socket,
     isConnected,
-    realtimeData
+    realtimeData,
+    refreshVersion
   };
 
   return (

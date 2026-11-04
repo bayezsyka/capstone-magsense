@@ -1,12 +1,79 @@
 const pool = require('../db');
 const { resolveBoxId } = require('../utils/resolveIds');
+const { paginationMeta, parseListQuery } = require('../utils/listQuery');
 
 const ACTUATOR_COLUMNS = 'id, box_id, type, status, source, timestamp';
+const ACTUATOR_ALIASED = ACTUATOR_COLUMNS
+    .split(', ')
+    .map((column) => `a.${column}`)
+    .join(', ');
+const ACTUATOR_JOIN = 'FROM actuator_logs a LEFT JOIN boxes b ON b.id = a.box_id';
+
+function buildFilters(listQuery) {
+    const params = [];
+    let where = 'WHERE 1=1';
+
+    if (listQuery.boxId) {
+        params.push(resolveBoxId(listQuery.boxId));
+        where += ` AND a.box_id = $${params.length}::uuid`;
+    }
+    if (listQuery.search) {
+        params.push(`%${listQuery.search}%`);
+        where += ` AND (b.name ILIKE $${params.length} OR a.type ILIKE $${params.length} OR a.status ILIKE $${params.length} OR a.source ILIKE $${params.length} OR a.box_id::text ILIKE $${params.length})`;
+    }
+    if (listQuery.start) {
+        params.push(listQuery.start);
+        where += ` AND a.timestamp >= $${params.length}::timestamp`;
+    }
+    if (listQuery.end) {
+        params.push(listQuery.end);
+        where += ` AND a.timestamp < ($${params.length}::date + INTERVAL '1 day')`;
+    }
+
+    return { params, where };
+}
 
 exports.getAllActuatorLogs = async (req, res) => {
     try {
-        const { rows } = await pool.query(`SELECT ${ACTUATOR_COLUMNS} FROM actuator_logs ORDER BY timestamp DESC LIMIT 100`);
-        res.json(rows);
+        const listQuery = parseListQuery(req.query);
+        const { params, where } = buildFilters(listQuery);
+
+        if (listQuery.latestPerBox) {
+            const { rows } = await pool.query(
+                `SELECT DISTINCT ON (a.box_id) ${ACTUATOR_ALIASED}, b.name AS box_name
+                 ${ACTUATOR_JOIN} ${where}
+                 ORDER BY a.box_id, a.timestamp DESC, a.id DESC`,
+                params
+            );
+            return res.json(rows);
+        }
+
+        const countRes = await pool.query(`SELECT COUNT(*)::int AS total ${ACTUATOR_JOIN} ${where}`, params);
+        const total = countRes.rows[0]?.total || 0;
+
+        if (!listQuery.paginated) {
+            const { rows } = await pool.query(
+                `SELECT ${ACTUATOR_ALIASED}, b.name AS box_name
+                 ${ACTUATOR_JOIN} ${where}
+                 ORDER BY a.timestamp ${listQuery.sort}, a.id ${listQuery.sort}
+                 LIMIT ${listQuery.legacyLimit}`,
+                params
+            );
+            return res.json(rows);
+        }
+
+        const dataParams = [...params, listQuery.limit, listQuery.offset];
+        const limitParam = dataParams.length - 1;
+        const offsetParam = dataParams.length;
+        const { rows } = await pool.query(
+            `SELECT ${ACTUATOR_ALIASED}, b.name AS box_name
+             ${ACTUATOR_JOIN} ${where}
+             ORDER BY a.timestamp ${listQuery.sort}, a.id ${listQuery.sort}
+             LIMIT $${limitParam} OFFSET $${offsetParam}`,
+            dataParams
+        );
+
+        return res.json({ data: rows, pagination: paginationMeta(listQuery, total) });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Failed to fetch actuator_logs' });

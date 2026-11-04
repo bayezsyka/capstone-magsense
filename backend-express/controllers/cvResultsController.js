@@ -1,7 +1,13 @@
 const pool = require('../db');
 const { resolveBoxId } = require('../utils/resolveIds');
+const { paginationMeta, parseListQuery } = require('../utils/listQuery');
 
 const CV_COLUMNS = 'id, box_id, image_url, dominant_phase, confidence_score, detection_counts, proportions, source, timestamp';
+const CV_ALIASED = CV_COLUMNS
+    .split(', ')
+    .map((column) => `c.${column}`)
+    .join(', ');
+const CV_JOIN = 'FROM cv_results c LEFT JOIN boxes b ON b.id = c.box_id';
 const DETECTION_KEYS = ['baby_larva', 'adult_larva', 'prepupa', 'pupa'];
 
 function toNumber(value) {
@@ -32,10 +38,74 @@ function buildDetectionCounts(body) {
     return counts;
 }
 
+function buildFilters(listQuery) {
+    const params = [];
+    let where = 'WHERE 1=1';
+
+    if (listQuery.boxId) {
+        params.push(resolveBoxId(listQuery.boxId));
+        where += ` AND c.box_id = $${params.length}::uuid`;
+    }
+    if (listQuery.search) {
+        params.push(`%${listQuery.search}%`);
+        where += ` AND (b.name ILIKE $${params.length} OR c.dominant_phase ILIKE $${params.length} OR c.source ILIKE $${params.length} OR c.box_id::text ILIKE $${params.length})`;
+    }
+    if (listQuery.start) {
+        params.push(listQuery.start);
+        where += ` AND c.timestamp >= $${params.length}::timestamp`;
+    }
+    if (listQuery.end) {
+        params.push(listQuery.end);
+        where += ` AND c.timestamp < ($${params.length}::date + INTERVAL '1 day')`;
+    }
+
+    return { params, where };
+}
+
 exports.getAllCvResults = async (req, res) => {
     try {
-        const { rows } = await pool.query(`SELECT ${CV_COLUMNS} FROM cv_results ORDER BY timestamp DESC LIMIT 100`);
-        res.json(rows.map(flattenCvRow));
+        const listQuery = parseListQuery(req.query);
+        const { params, where } = buildFilters(listQuery);
+
+        if (listQuery.latestPerBox) {
+            const { rows } = await pool.query(
+                `SELECT DISTINCT ON (c.box_id) ${CV_ALIASED}, b.name AS box_name
+                 ${CV_JOIN} ${where}
+                 ORDER BY c.box_id, c.timestamp DESC, c.id DESC`,
+                params
+            );
+            return res.json(rows.map(flattenCvRow));
+        }
+
+        const countRes = await pool.query(`SELECT COUNT(*)::int AS total ${CV_JOIN} ${where}`, params);
+        const total = countRes.rows[0]?.total || 0;
+
+        if (!listQuery.paginated) {
+            const { rows } = await pool.query(
+                `SELECT ${CV_ALIASED}, b.name AS box_name
+                 ${CV_JOIN} ${where}
+                 ORDER BY c.timestamp ${listQuery.sort}, c.id ${listQuery.sort}
+                 LIMIT ${listQuery.legacyLimit}`,
+                params
+            );
+            return res.json(rows.map(flattenCvRow));
+        }
+
+        const dataParams = [...params, listQuery.limit, listQuery.offset];
+        const limitParam = dataParams.length - 1;
+        const offsetParam = dataParams.length;
+        const { rows } = await pool.query(
+            `SELECT ${CV_ALIASED}, b.name AS box_name
+             ${CV_JOIN} ${where}
+             ORDER BY c.timestamp ${listQuery.sort}, c.id ${listQuery.sort}
+             LIMIT $${limitParam} OFFSET $${offsetParam}`,
+            dataParams
+        );
+
+        return res.json({
+            data: rows.map(flattenCvRow),
+            pagination: paginationMeta(listQuery, total)
+        });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Failed to fetch cv_results' });

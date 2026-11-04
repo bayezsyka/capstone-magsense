@@ -136,10 +136,11 @@ export default function useBoxOverview({
   includeSensorData = false,
   pollMs = 10000
 } = {}) {
-  const { user } = useGlobalContext();
+  const { user, refreshVersion } = useGlobalContext();
   const { realtimeData } = useWebSocket();
   const mountedRef = useRef(true);
   const lastRefreshRef = useRef(0);
+  const isFetchingRef = useRef(false);
 
   const [raw, setRaw] = useState({
     boxes: [],
@@ -159,31 +160,38 @@ export default function useBoxOverview({
   }, []);
 
   const fetchData = useCallback(async ({ silent = false } = {}) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
     if (!silent) setIsLoading(true);
     let boxesError = null;
 
-    const [boxes, summary, predictions, cvResults, sensorRows] = await Promise.all([
-      getAllBoxes().catch((err) => {
-        boxesError = err;
-        return [];
-      }),
-      getDashboardSummary().catch(() => null),
-      includePrediction ? getAllHarvestPredictions().catch(() => []) : Promise.resolve([]),
-      includeCv ? getAllCvResults().catch(() => []) : Promise.resolve([]),
-      includeSensorData ? getAllSensorData().catch(() => []) : Promise.resolve([])
-    ]);
+    try {
+      const [boxes, summary, predictions, cvResults, sensorRows] = await Promise.all([
+        getAllBoxes().catch((err) => {
+          boxesError = err;
+          return [];
+        }),
+        getDashboardSummary().catch(() => null),
+        includePrediction ? getAllHarvestPredictions({ latest_per_box: true }).catch(() => []) : Promise.resolve([]),
+        includeCv ? getAllCvResults({ latest_per_box: true }).catch(() => []) : Promise.resolve([]),
+        includeSensorData ? getAllSensorData({ latest_per_box: true }).catch(() => []) : Promise.resolve([])
+      ]);
 
-    if (!mountedRef.current) return;
+      if (!mountedRef.current) return;
 
-    setRaw({
-      boxes: Array.isArray(boxes) ? boxes : [],
-      summary,
-      predictions: Array.isArray(predictions) ? predictions : [],
-      cvResults: Array.isArray(cvResults) ? cvResults : [],
-      sensorRows: Array.isArray(sensorRows) ? sensorRows : []
-    });
-    setError(boxesError);
-    setIsLoading(false);
+      setRaw({
+        boxes: Array.isArray(boxes) ? boxes : [],
+        summary,
+        predictions: Array.isArray(predictions) ? predictions : [],
+        cvResults: Array.isArray(cvResults) ? cvResults : [],
+        sensorRows: Array.isArray(sensorRows) ? sensorRows : []
+      });
+      setError(boxesError);
+    } finally {
+      isFetchingRef.current = false;
+      if (mountedRef.current) setIsLoading(false);
+    }
   }, [includePrediction, includeCv, includeSensorData]);
 
   useEffect(() => {
@@ -197,6 +205,14 @@ export default function useBoxOverview({
     }, pollMs);
     return () => clearInterval(interval);
   }, [fetchData, pollMs]);
+
+  useEffect(() => {
+    if (!refreshVersion) return undefined;
+    const timer = setTimeout(() => {
+      fetchData({ silent: true });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [refreshVersion, fetchData]);
 
   useEffect(() => {
     const refresh = () => {

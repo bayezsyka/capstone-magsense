@@ -10,21 +10,30 @@ import BoxCardGrid from '../components/BoxCardGrid';
 const Dashboard = () => {
   const { user } = useGlobalContext();
   const { isConnected } = useWebSocket();
-  const { cards, summary, isLoading } = useBoxOverview({ includeSensorData: true, pollMs: 10000 });
+  const { cards, summary, isLoading } = useBoxOverview({
+    includeSensorData: true,
+    includePrediction: true,
+    includeCv: true,
+    pollMs: 10000
+  });
 
   const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
   const primaryCard = cards.find((card) => card.number === 1) || cards[0] || null;
   const actuators = isAdmin ? (summary?.currentBox?.actuators || {}) : {};
-  const summaryDays = isAdmin ? parseFloat(summary?.harvestPrediction?.estimatedDays) : null;
-  const estimatedDays = primaryCard?.days ?? summaryDays;
+  const summaryDays = parseFloat(summary?.harvestPrediction?.estimatedDays);
+  const estimatedDays = primaryCard?.days ?? (Number.isFinite(summaryDays) ? summaryDays : null);
 
   const airTemp = primaryCard?.temp ?? '--';
   const airHumidity = primaryCard?.humidity ?? '--';
   const mediaHumidity = primaryCard?.mediaHumidity ?? '--';
   const currentNumber = primaryCard?.number ?? '--';
   const phase = primaryCard?.dominantPhase
-    || (isAdmin ? summary?.cvAnalysis?.dominantPhase : null)
+    || summary?.cvAnalysis?.dominantPhase
     || '--';
+  const urgency = primaryCard?.urgency || summary?.harvestPrediction?.urgencyLevel || null;
+  const lastUpdated = primaryCard?.timestamp
+    ? new Date(primaryCard.timestamp).toLocaleTimeString('id-ID')
+    : '--';
 
   return (
     <ErrorBoundary>
@@ -165,6 +174,10 @@ const Dashboard = () => {
                 <p className="text-sm font-semibold">{phase}</p>
               </div>
             </div>
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/5 px-3 py-2 mb-4">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Urgensi</span>
+              <span className="text-xs font-bold text-mag-green">{urgency || '--'}</span>
+            </div>
             <p className="text-[10px] text-gray-400 italic">*Estimasi berdasarkan Computer Vision & ML</p>
           </div>
 
@@ -176,6 +189,10 @@ const Dashboard = () => {
                 <span className={`text-sm font-semibold ${isConnected ? 'text-mag-green' : 'text-red-500'}`}>
                   {isConnected ? 'Terhubung' : 'Terputus'}
                 </span>
+              </div>
+              <div className="flex justify-between items-center border-b border-gray-50 pb-2">
+                <span className="text-sm text-gray-500">Terakhir Sinkron</span>
+                <span className="text-sm font-semibold text-slate-700">{lastUpdated}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-500">Database API</span>
