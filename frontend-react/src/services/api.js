@@ -163,9 +163,6 @@ export const getPredictions = getAllHarvestPredictions;
 export const getLatestHarvestPrediction = async (boxId) => { try { const res = await api.get("/harvest-predictions/latest", { params: boxId ? { box_id: boxId } : {} }); return res.data; } catch (e) { handleError(e, "Gagal memuat prediksi panen terbaru"); } };
 export const deleteHarvestPrediction = async (id) => { try { const res = await api.delete(`/harvest-predictions/${id}`); return res.data; } catch (e) { handleError(e, "Gagal menghapus harvest prediction"); } };
 
-export const getAllBoxLocations = async () => { try { const res = await api.get("/box-locations"); return res.data; } catch (e) { handleError(e, "Gagal memuat box locations"); } };
-export const deleteBoxLocation = async (id) => { try { const res = await api.delete(`/box-locations/${id}`); return res.data; } catch (e) { handleError(e, "Gagal menghapus box location"); } };
-
 // 7. Notifications
 export const getAllNotifications = async () => { try { const res = await api.get("/notifications"); return res.data; } catch (e) { handleError(e, "Gagal memuat notifikasi"); } };
 export const createNotification = async (data) => { try { const res = await api.post("/notifications", data); return res.data; } catch (e) { handleError(e, "Gagal membuat notifikasi"); } };
