@@ -26,7 +26,32 @@ services:
     depends_on:
       - mosquitto
 
-  # === 3. EDGE PYTHON WORKERS (MQTT, CV, ML, LOCAL API, CLOUD SYNC) ===
+  # === 3. YOLO CV INFERENCE API ===
+  cv-inference:
+    build:
+      context: ./edge-pi-python
+      dockerfile: Dockerfile
+    container_name: capstone-cv-inference
+    restart: unless-stopped
+    command: python cv_inference_server.py
+    volumes:
+      - ./edge-pi-python:/app
+    environment:
+      - YOLO_CONF=${YOLO_CONF:-0.25}
+      - YOLO_IOU=${YOLO_IOU:-0.6}
+      - YOLO_AUGMENT=${YOLO_AUGMENT:-false}
+      - YOLO_CLASS_CONF=${YOLO_CLASS_CONF:-{"0":0.55,"1":0.30,"2":0.30,"3":0.30}}
+      - YOLO_IMGSZ=${YOLO_IMGSZ:-1280}
+      - YOLO_MAX_DET=${YOLO_MAX_DET:-3000}
+      - TILED_MIN_LONG_SIDE=${TILED_MIN_LONG_SIDE:-720}
+      - TILE_SIZE=${TILE_SIZE:-640}
+      - TILE_OVERLAP=${TILE_OVERLAP:-0.25}
+      - TILE_BORDER_PX=${TILE_BORDER_PX:-6}
+      - TILE_NMS_IOU=${TILE_NMS_IOU:-0.5}
+    ports:
+      - "5001:5001"
+
+  # === 4. EDGE PYTHON WORKERS (MQTT, CV, ML, LOCAL API, CLOUD SYNC) ===
   edge-service:
     build:
       context: ./edge-pi-python
@@ -46,6 +71,17 @@ services:
       - CV_INTERVAL_SEC=10
       - PREDICT_INTERVAL_SEC=20
       - LOCAL_API_PORT=8080
+      - YOLO_CONF=${YOLO_CONF:-0.25}
+      - YOLO_IOU=${YOLO_IOU:-0.6}
+      - YOLO_AUGMENT=${YOLO_AUGMENT:-false}
+      - YOLO_CLASS_CONF=${YOLO_CLASS_CONF:-{"0":0.55,"1":0.30,"2":0.30,"3":0.30}}
+      - YOLO_IMGSZ=${YOLO_IMGSZ:-1280}
+      - YOLO_MAX_DET=${YOLO_MAX_DET:-3000}
+      - TILED_MIN_LONG_SIDE=${TILED_MIN_LONG_SIDE:-720}
+      - TILE_SIZE=${TILE_SIZE:-640}
+      - TILE_OVERLAP=${TILE_OVERLAP:-0.25}
+      - TILE_BORDER_PX=${TILE_BORDER_PX:-6}
+      - TILE_NMS_IOU=${TILE_NMS_IOU:-0.5}
     ports:
       - "8080:8080"
     depends_on:
