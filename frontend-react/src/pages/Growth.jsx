@@ -168,14 +168,23 @@ export default function Growth() {
 
     if (!boxes || boxes.length === 0) return;
 
-    const scaleX = displayW / (origWidth || displayW);
-    const scaleY = displayH / (origHeight || displayH);
+    // Video dan overlay memakai object-cover. Hitung skala serta crop yang sama
+    // agar koordinat box tetap menempel pada objek yang terlihat.
+    const sourceW = origWidth || displayW;
+    const sourceH = origHeight || displayH;
+    const coverScale = Math.max(displayW / sourceW, displayH / sourceH);
+    const renderedW = sourceW * coverScale;
+    const renderedH = sourceH * coverScale;
+    const cropX = (renderedW - displayW) / 2;
+    const cropY = (renderedH - displayH) / 2;
+    const toDisplayX = (value) => value * coverScale - cropX;
+    const toDisplayY = (value) => value * coverScale - cropY;
 
     boxes.forEach((box) => {
-      const x1 = box.x1 * scaleX;
-      const y1 = box.y1 * scaleY;
-      const w = (box.x2 - box.x1) * scaleX;
-      const h = (box.y2 - box.y1) * scaleY;
+      const x1 = toDisplayX(box.x1);
+      const y1 = toDisplayY(box.y1);
+      const w = (box.x2 - box.x1) * coverScale;
+      const h = (box.y2 - box.y1) * coverScale;
 
       let color = "#06b6d4"; // Cyan default
       if (box.class_name.includes("Adult")) color = "#10b981"; // Hijau
@@ -186,8 +195,8 @@ export default function Growth() {
       ctx.lineWidth = 2;
       ctx.strokeRect(x1, y1, w, h);
 
-      // Label background
-      const label = `${box.class_name} ${(box.confidence * 100).toFixed(0)}%`;
+      // Label confidence ditampilkan sebagai desimal, misalnya 0.85.
+      const label = `${box.class_name} ${(Number(box.confidence) || 0).toFixed(2)}`;
       ctx.font = "10px sans-serif";
       const textWidth = ctx.measureText(label).width;
 
@@ -209,28 +218,17 @@ export default function Growth() {
     setScanMessage("Memproses inferensi model di Proxmox CT 600...");
 
     try {
-      // Buat canvas capture off-screen dengan batas resolusi max 640px demi efisiensi inferensi
+      // Kirim resolusi asli kamera agar detail objek kecil tidak hilang sebelum inference.
       const captureCanvas = document.createElement("canvas");
-      const maxDim = 640;
-      let w = video.videoWidth || 640;
-      let h = video.videoHeight || 480;
-
-      if (w > maxDim || h > maxDim) {
-        if (w > h) {
-          h = Math.round((h * maxDim) / w);
-          w = maxDim;
-        } else {
-          w = Math.round((w * maxDim) / h);
-          h = maxDim;
-        }
-      }
+      const w = video.videoWidth || 1280;
+      const h = video.videoHeight || 720;
 
       captureCanvas.width = w;
       captureCanvas.height = h;
       const ctx = captureCanvas.getContext("2d");
       ctx.drawImage(video, 0, 0, w, h);
 
-      const base64Data = captureCanvas.toDataURL("image/jpeg", 0.82);
+      const base64Data = captureCanvas.toDataURL("image/jpeg", 0.90);
 
       const result = await scanFrameCv({
         image: base64Data,
@@ -257,7 +255,7 @@ export default function Growth() {
           pupa: pu,
           total: tot,
           dominant: result.dominant_phase || "-",
-          confidence: Math.round((result.confidence_score || 0.85) * 100),
+          confidence: Number(result.confidence_score || 0.85),
           inferenceMs: result.inference_ms || 0,
           source: "Kamera Device (Live Proxmox)"
         });
@@ -320,7 +318,7 @@ export default function Growth() {
             pupa: pu,
             total: tot,
             dominant: result.dominant_phase || "-",
-            confidence: Math.round((result.confidence_score || 0.85) * 100),
+            confidence: Number(result.confidence_score || 0.85),
             inferenceMs: result.inference_ms || 0,
             source: "Unggahan File Foto"
           });
@@ -426,11 +424,10 @@ export default function Growth() {
           {/* Tombol Kamera Utama */}
           <button
             onClick={isCameraActive ? stopCamera : startCamera}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all duration-200 text-sm shadow-sm ${
-              isCameraActive
-                ? "bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100"
-                : "bg-[#0c253b] text-white hover:bg-[#081a2a]"
-            }`}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all duration-200 text-sm shadow-sm ${isCameraActive
+              ? "bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100"
+              : "bg-[#0c253b] text-white hover:bg-[#081a2a]"
+              }`}
           >
             {isCameraActive ? <CameraOff size={16} /> : <Camera size={16} />}
             {isCameraActive ? "Tutup Kamera" : "Buka Kamera Device"}
@@ -453,11 +450,10 @@ export default function Growth() {
             <button
               onClick={performScan}
               disabled={isScanning}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all text-sm text-white shadow-sm ${
-                isScanning
-                  ? "bg-slate-400 cursor-not-allowed"
-                  : "bg-[#97ad82] hover:bg-[#869b71]"
-              }`}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all text-sm text-white shadow-sm ${isScanning
+                ? "bg-slate-400 cursor-not-allowed"
+                : "bg-[#97ad82] hover:bg-[#869b71]"
+                }`}
             >
               <Play size={16} />
               {isScanning ? "Memindai..." : "Pindai Frame"}
@@ -468,11 +464,10 @@ export default function Growth() {
           {isCameraActive && (
             <button
               onClick={() => setAutoScanEnabled(!autoScanEnabled)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm border transition-all ${
-                autoScanEnabled
-                  ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-              }`}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm border transition-all ${autoScanEnabled
+                ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                }`}
             >
               <Sparkles size={14} className={autoScanEnabled ? "text-emerald-600 animate-pulse" : ""} />
               <span>{autoScanEnabled ? "Auto-Pindai Aktif (2.5s)" : "Auto-Pindai"}</span>
@@ -522,17 +517,15 @@ export default function Growth() {
             autoPlay
             playsInline
             muted
-            className={`w-full h-full object-cover absolute inset-0 z-10 ${
-              isCameraActive ? "block" : "hidden"
-            }`}
+            className={`w-full h-full object-cover absolute inset-0 z-10 ${isCameraActive ? "block" : "hidden"
+              }`}
           />
 
           {/* Canvas Overlay Bounding Boxes */}
           <canvas
             ref={canvasRef}
-            className={`w-full h-full object-cover absolute inset-0 z-20 pointer-events-none ${
-              isCameraActive ? "block" : "hidden"
-            }`}
+            className={`w-full h-full object-cover absolute inset-0 z-20 pointer-events-none ${isCameraActive ? "block" : "hidden"
+              }`}
           />
 
           {/* Overlay Status Scanning */}
@@ -595,7 +588,7 @@ export default function Growth() {
                   {detectionData.dominant === "-" ? "Belum Ada" : detectionData.dominant}
                 </span>
                 <span className="text-[10px] text-emerald-700 font-bold block mt-0.5">
-                  Akurasi: {detectionData.confidence}%
+                  Akurasi: {(Number(detectionData.confidence) * 100).toFixed(2).replace(".", ",")}%
                 </span>
               </div>
             </div>
@@ -603,8 +596,8 @@ export default function Growth() {
             {/* Cacah 4 Fase */}
             <div className="grid grid-cols-4 gap-2 pt-1">
               {[
-                { label: "Bayi", val: detectionData.babyLarva, border: "border-cyan-200", bg: "bg-cyan-50/50" },
-                { label: "Dewasa", val: detectionData.adultLarva, border: "border-emerald-200", bg: "bg-emerald-50/50" },
+                { label: "Baby Larva", val: detectionData.babyLarva, border: "border-cyan-200", bg: "bg-cyan-50/50" },
+                { label: "Adult Larva", val: detectionData.adultLarva, border: "border-emerald-200", bg: "bg-emerald-50/50" },
                 { label: "Prepupa", val: detectionData.prepupa, border: "border-amber-200", bg: "bg-amber-50/50" },
                 { label: "Pupa", val: detectionData.pupa, border: "border-purple-200", bg: "bg-purple-50/50" }
               ].map((item) => {
@@ -657,21 +650,20 @@ export default function Growth() {
                   Urgensi Panen
                 </span>
                 <span
-                  className={`inline-block px-3 py-1 rounded-lg text-xs font-bold ${
-                    harvestData.urgencyLevel === "High"
-                      ? "bg-rose-100 text-rose-800"
-                      : harvestData.urgencyLevel === "Medium"
+                  className={`inline-block px-3 py-1 rounded-lg text-xs font-bold ${harvestData.urgencyLevel === "High"
+                    ? "bg-rose-100 text-rose-800"
+                    : harvestData.urgencyLevel === "Medium"
                       ? "bg-amber-100 text-amber-800"
                       : "bg-emerald-100 text-emerald-800"
-                  }`}
+                    }`}
                 >
                   {harvestData.urgencyLevel === "High"
                     ? "Mendesak"
                     : harvestData.urgencyLevel === "Medium"
-                    ? "Sedang"
-                    : harvestData.urgencyLevel === "Low"
-                    ? "Normal"
-                    : "Belum Dihitung"}
+                      ? "Sedang"
+                      : harvestData.urgencyLevel === "Low"
+                        ? "Normal"
+                        : "Belum Dihitung"}
                 </span>
               </div>
             </div>

@@ -60,7 +60,7 @@ const formatDetections = (item) => {
   const prepupa = item.prepupa ?? counts.prepupa ?? 0;
   const pupa = item.pupa ?? counts.pupa ?? 0;
   const total = item.total_detected ?? counts.total_detected ?? (Number(baby) + Number(adult) + Number(prepupa) + Number(pupa));
-  return `Total ${total} • Bayi ${baby} • Dewasa ${adult} • Prepupa ${prepupa} • Pupa ${pupa}`;
+  return `Total ${total} • Baby Larva ${baby} • Adult Larva ${adult} • Prepupa ${prepupa} • Pupa ${pupa}`;
 };
 
 const getSearchText = (item, tab, boxNameMap) => {
@@ -512,11 +512,10 @@ export default function HistoryPage() {
                   type="button"
                   onClick={() => setPage(item)}
                   disabled={isLoading}
-                  className={`min-w-[36px] rounded-lg border px-2 py-2 text-xs font-black transition ${
-                    item === page
-                      ? 'border-mag-green bg-mag-green text-white shadow-glow'
-                      : 'border-slate-200 text-slate-500 hover:border-mag-green hover:text-mag-green'
-                  } disabled:cursor-not-allowed disabled:opacity-60`}
+                  className={`min-w-[36px] rounded-lg border px-2 py-2 text-xs font-black transition ${item === page
+                    ? 'border-mag-green bg-mag-green text-white shadow-glow'
+                    : 'border-slate-200 text-slate-500 hover:border-mag-green hover:text-mag-green'
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
                 >
                   {item}
                 </button>
