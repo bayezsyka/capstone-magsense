@@ -13,6 +13,8 @@ from pydantic import BaseModel
 from ultralytics import YOLO
 import xgboost as xgb
 
+from inference import predict
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [CV-SERVER] - %(message)s")
 logger = logging.getLogger("cv_server")
 
@@ -69,46 +71,44 @@ async def scan_frame(payload: ScanRequest):
         raise HTTPException(status_code=400, detail=f"Invalid image data: {str(e)}")
 
     t_start = time.time()
-    results = yolo_model.predict(source=img_np, conf=0.25, verbose=False)
+    detections, inference_mode = predict(yolo_model, img_np)
     infer_time_ms = round((time.time() - t_start) * 1000, 1)
 
     baby, adult, prepupa, pupa = 0, 0, 0, 0
     conf_scores: List[float] = []
     boxes_out = []
 
-    if results and len(results) > 0:
-        boxes = results[0].boxes
-        for i in range(len(boxes)):
-            cls_id = int(boxes.cls[i])
-            conf = float(boxes.conf[i])
-            conf_scores.append(conf)
-            cls_name = yolo_model.names.get(cls_id, "").upper()
+    for detection in detections:
+        cls_id = detection["class_id"]
+        conf = detection["confidence"]
+        conf_scores.append(conf)
+        cls_name = yolo_model.names.get(cls_id, "").upper()
 
-            if "BABY" in cls_name:
-                baby += 1
-                canonical_cls = "Baby Larva"
-            elif "ADULT" in cls_name:
-                adult += 1
-                canonical_cls = "Adult Larva"
-            elif "PREPUPA" in cls_name:
-                prepupa += 1
-                canonical_cls = "Prepupa"
-            elif "PUPA" in cls_name:
-                pupa += 1
-                canonical_cls = "Pupa"
-            else:
-                canonical_cls = cls_name
+        if "BABY" in cls_name:
+            baby += 1
+            canonical_cls = "Baby Larva"
+        elif "ADULT" in cls_name:
+            adult += 1
+            canonical_cls = "Adult Larva"
+        elif "PREPUPA" in cls_name:
+            prepupa += 1
+            canonical_cls = "Prepupa"
+        elif "PUPA" in cls_name:
+            pupa += 1
+            canonical_cls = "Pupa"
+        else:
+            canonical_cls = cls_name
 
-            xyxy = boxes.xyxy[i].tolist()
-            boxes_out.append({
-                "x1": round(xyxy[0], 1),
-                "y1": round(xyxy[1], 1),
-                "x2": round(xyxy[2], 1),
-                "y2": round(xyxy[3], 1),
-                "confidence": round(conf, 3),
-                "class_name": canonical_cls,
-                "class_id": cls_id
-            })
+        xyxy = detection["xyxy"]
+        boxes_out.append({
+            "x1": round(xyxy[0], 1),
+            "y1": round(xyxy[1], 1),
+            "x2": round(xyxy[2], 1),
+            "y2": round(xyxy[3], 1),
+            "confidence": round(conf, 3),
+            "class_name": canonical_cls,
+            "class_id": cls_id
+        })
 
     total_detected = baby + adult + prepupa + pupa
     stages = {"BABY LARVA": baby, "ADULT LARVA": adult, "PREPUPA": prepupa, "PUPA": pupa}
@@ -147,6 +147,7 @@ async def scan_frame(payload: ScanRequest):
         "success": True,
         "image_size": {"width": img_w, "height": img_h},
         "inference_ms": infer_time_ms,
+        "inference_mode": inference_mode,
         "detection_counts": {
             "baby_larva": baby,
             "adult_larva": adult,
