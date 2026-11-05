@@ -35,7 +35,7 @@ services:
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-smart_farming_db}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      CV_SERVICE_URL: ${CV_SERVICE_URL:-http://cv-inference:5001/scan}
+      CV_SERVICE_URL: ${CV_SERVICE_URL:-http://172.18.0.1:5001/scan}
       YOLO_CONF: ${YOLO_CONF:-0.25}
       YOLO_IOU: ${YOLO_IOU:-0.6}
       YOLO_AUGMENT: ${YOLO_AUGMENT:-false}
