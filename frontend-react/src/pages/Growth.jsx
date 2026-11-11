@@ -15,6 +15,101 @@ import {
 } from "lucide-react";
 import { getAllCvResults, getAllBoxes, scanFrameCv } from "../services/api";
 
+const DOMINANT_PHASE_TO_KEY = {
+  "BABY LARVA": "babyLarva",
+  "ADULT LARVA": "adultLarva",
+  "PREPUPA": "prepupa",
+  "PUPA": "pupa"
+};
+
+const BOX_CLASS_TO_KEY = {
+  "Baby Larva": "babyLarva",
+  "Adult Larva": "adultLarva",
+  "Prepupa": "prepupa",
+  "Pupa": "pupa"
+};
+
+const formatConfidence = (value) => {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return "-";
+  return `${(num * 100).toFixed(2).replace(".", ",")}%`;
+};
+
+const computePhaseConfidences = (boxes) => {
+  const result = { babyLarva: null, adultLarva: null, prepupa: null, pupa: null };
+  if (!Array.isArray(boxes) || boxes.length === 0) return result;
+
+  const sums = { babyLarva: 0, adultLarva: 0, prepupa: 0, pupa: 0 };
+  const counts = { babyLarva: 0, adultLarva: 0, prepupa: 0, pupa: 0 };
+  boxes.forEach((box) => {
+    const key = BOX_CLASS_TO_KEY[box.class_name];
+    if (!key) return;
+    sums[key] += Number(box.confidence) || 0;
+    counts[key] += 1;
+  });
+  Object.keys(sums).forEach((key) => {
+    if (counts[key] > 0) result[key] = sums[key] / counts[key];
+  });
+  return result;
+};
+
+const normalizePhaseConfidences = (raw, boxes) => {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const normalized = {
+    babyLarva: source.baby_larva ?? null,
+    adultLarva: source.adult_larva ?? null,
+    prepupa: source.prepupa ?? null,
+    pupa: source.pupa ?? null
+  };
+  if (Object.values(normalized).every((v) => v === null || v === undefined)) {
+    return computePhaseConfidences(boxes);
+  }
+  return normalized;
+};
+
+const buildDetectionState = (result, sourceLabel, timestamp) => {
+  const counts = result.detection_counts && typeof result.detection_counts === "object" ? result.detection_counts : {};
+  const b = Number(counts.baby_larva ?? result.baby_larva ?? 0);
+  const a = Number(counts.adult_larva ?? result.adult_larva ?? 0);
+  const pr = Number(counts.prepupa ?? result.prepupa ?? 0);
+  const pu = Number(counts.pupa ?? result.pupa ?? 0);
+  const tot = Number(counts.total_detected ?? b + a + pr + pu);
+
+  const overallConfidence = Number(result.confidence_score) || 0;
+  const dominant = result.dominant_phase || "-";
+  const phaseConfidences = normalizePhaseConfidences(
+    result.phase_confidences || counts.phase_confidences,
+    result.boxes
+  );
+
+  let dominantConfidence = result.dominant_phase_confidence ?? counts.dominant_phase_confidence ?? null;
+  if (dominantConfidence === null || dominantConfidence === undefined) {
+    dominantConfidence = phaseConfidences[DOMINANT_PHASE_TO_KEY[dominant]] ?? null;
+  }
+  if ((dominantConfidence === null || dominantConfidence === undefined) && overallConfidence > 0) {
+    dominantConfidence = overallConfidence;
+  }
+
+  return {
+    time: new Date(timestamp || Date.now()).toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    }) + " WIB",
+    babyLarva: b,
+    adultLarva: a,
+    prepupa: pr,
+    pupa: pu,
+    total: tot,
+    dominant,
+    confidence: overallConfidence,
+    dominantConfidence,
+    phaseConfidences,
+    inferenceMs: Number(result.inference_ms) || 0,
+    source: sourceLabel
+  };
+};
+
 export default function Growth() {
   const [boxes, setBoxes] = useState([]);
   const [selectedBoxId, setSelectedBoxId] = useState("");
@@ -40,6 +135,8 @@ export default function Growth() {
     total: 0,
     dominant: "-",
     confidence: 0,
+    dominantConfidence: null,
+    phaseConfidences: { babyLarva: null, adultLarva: null, prepupa: null, pupa: null },
     inferenceMs: 0,
     source: "Belum Ada Pindaian"
   });
@@ -69,29 +166,7 @@ export default function Growth() {
         const cvList = await getAllCvResults();
         if (cvList && cvList.length > 0) {
           const latest = cvList[0];
-          const counts = latest.detection_counts || {};
-          const b = counts.baby_larva || latest.baby_larva || 0;
-          const a = counts.adult_larva || latest.adult_larva || 0;
-          const pr = counts.prepupa || latest.prepupa || 0;
-          const pu = counts.pupa || latest.pupa || 0;
-          const tot = b + a + pr + pu;
-
-          setDetectionData({
-            time: new Date(latest.timestamp).toLocaleTimeString("id-ID", {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit"
-            }) + " WIB",
-            babyLarva: b,
-            adultLarva: a,
-            prepupa: pr,
-            pupa: pu,
-            total: tot,
-            dominant: latest.dominant_phase || "-",
-            confidence: latest.confidence_score ? Math.round(latest.confidence_score * 100) : 85,
-            inferenceMs: 0,
-            source: "Database Riwayat"
-          });
+          setDetectionData(buildDetectionState(latest, "Database Riwayat", latest.timestamp));
         }
       } catch (err) {
         console.warn("Gagal memuat riwayat CV:", err);
@@ -236,29 +311,7 @@ export default function Growth() {
       });
 
       if (result && result.success) {
-        const counts = result.detection_counts || {};
-        const b = counts.baby_larva || 0;
-        const a = counts.adult_larva || 0;
-        const pr = counts.prepupa || 0;
-        const pu = counts.pupa || 0;
-        const tot = counts.total_detected || b + a + pr + pu;
-
-        setDetectionData({
-          time: new Date().toLocaleTimeString("id-ID", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit"
-          }) + " WIB",
-          babyLarva: b,
-          adultLarva: a,
-          prepupa: pr,
-          pupa: pu,
-          total: tot,
-          dominant: result.dominant_phase || "-",
-          confidence: Number(result.confidence_score || 0.85),
-          inferenceMs: result.inference_ms || 0,
-          source: "Kamera Device (Live Proxmox)"
-        });
+        setDetectionData(buildDetectionState(result, "Kamera Device (Live Proxmox)"));
 
         if (result.harvest_prediction) {
           setHarvestData({
@@ -270,6 +323,7 @@ export default function Growth() {
         }
 
         drawBoundingBoxes(result.boxes, w, h);
+        const tot = result.detection_counts?.total_detected || 0;
         setScanMessage(`Pindaian selesai (${result.inference_ms} ms) — ${tot} larva terdeteksi.`);
       }
     } catch (err) {
@@ -299,29 +353,7 @@ export default function Growth() {
         });
 
         if (result && result.success) {
-          const counts = result.detection_counts || {};
-          const b = counts.baby_larva || 0;
-          const a = counts.adult_larva || 0;
-          const pr = counts.prepupa || 0;
-          const pu = counts.pupa || 0;
-          const tot = counts.total_detected || b + a + pr + pu;
-
-          setDetectionData({
-            time: new Date().toLocaleTimeString("id-ID", {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit"
-            }) + " WIB",
-            babyLarva: b,
-            adultLarva: a,
-            prepupa: pr,
-            pupa: pu,
-            total: tot,
-            dominant: result.dominant_phase || "-",
-            confidence: Number(result.confidence_score || 0.85),
-            inferenceMs: result.inference_ms || 0,
-            source: "Unggahan File Foto"
-          });
+          setDetectionData(buildDetectionState(result, "Unggahan File Foto"));
 
           if (result.harvest_prediction) {
             setHarvestData({
@@ -332,6 +364,7 @@ export default function Growth() {
             });
           }
 
+          const tot = result.detection_counts?.total_detected || 0;
           setScanMessage(`Analisis foto selesai (${result.inference_ms} ms) — ${tot} larva terdeteksi.`);
         }
       } catch (err) {
@@ -588,7 +621,7 @@ export default function Growth() {
                   {detectionData.dominant === "-" ? "Belum Ada" : detectionData.dominant}
                 </span>
                 <span className="text-[10px] text-emerald-700 font-bold block mt-0.5">
-                  Akurasi: {(Number(detectionData.confidence) * 100).toFixed(2).replace(".", ",")}%
+                  Rata-rata Confidence: {formatConfidence(detectionData.dominantConfidence)}
                 </span>
               </div>
             </div>
@@ -596,10 +629,10 @@ export default function Growth() {
             {/* Cacah 4 Fase */}
             <div className="grid grid-cols-4 gap-2 pt-1">
               {[
-                { label: "Baby Larva", val: detectionData.babyLarva, border: "border-cyan-200", bg: "bg-cyan-50/50" },
-                { label: "Adult Larva", val: detectionData.adultLarva, border: "border-emerald-200", bg: "bg-emerald-50/50" },
-                { label: "Prepupa", val: detectionData.prepupa, border: "border-amber-200", bg: "bg-amber-50/50" },
-                { label: "Pupa", val: detectionData.pupa, border: "border-purple-200", bg: "bg-purple-50/50" }
+                { label: "Baby Larva", val: detectionData.babyLarva, conf: detectionData.phaseConfidences?.babyLarva, border: "border-cyan-200", bg: "bg-cyan-50/50" },
+                { label: "Adult Larva", val: detectionData.adultLarva, conf: detectionData.phaseConfidences?.adultLarva, border: "border-emerald-200", bg: "bg-emerald-50/50" },
+                { label: "Prepupa", val: detectionData.prepupa, conf: detectionData.phaseConfidences?.prepupa, border: "border-amber-200", bg: "bg-amber-50/50" },
+                { label: "Pupa", val: detectionData.pupa, conf: detectionData.phaseConfidences?.pupa, border: "border-purple-200", bg: "bg-purple-50/50" }
               ].map((item) => {
                 const pct = totalObjects === 0 ? 0 : Math.round((item.val / totalObjects) * 100);
                 return (
@@ -610,6 +643,9 @@ export default function Growth() {
                     <span className="text-[10px] font-bold text-slate-600">{item.label}</span>
                     <span className="text-base font-black text-slate-900 my-0.5">{item.val}</span>
                     <span className="text-[9px] font-semibold text-slate-500">{pct}%</span>
+                    <span className="text-[9px] font-semibold text-slate-500">
+                      Rata-rata {formatConfidence(item.conf)}
+                    </span>
                   </div>
                 );
               })}

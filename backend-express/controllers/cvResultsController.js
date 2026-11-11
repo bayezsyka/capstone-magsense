@@ -239,13 +239,19 @@ exports.scanFrame = async (req, res) => {
 
         if (targetBoxId) {
             try {
+                const detectionCountsPayload = {
+                    ...inferData.detection_counts,
+                    phase_confidences: inferData.phase_confidences || null,
+                    dominant_phase_confidence: inferData.dominant_phase_confidence ?? null
+                };
+
                 const cvInsert = await pool.query(
                     'INSERT INTO cv_results (box_id, dominant_phase, confidence_score, detection_counts, proportions, source, timestamp) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP) RETURNING id',
                     [
                         targetBoxId,
                         inferData.dominant_phase,
                         inferData.confidence_score,
-                        JSON.stringify(inferData.detection_counts),
+                        JSON.stringify(detectionCountsPayload),
                         JSON.stringify(inferData.proportions),
                         'camera_device'
                     ]

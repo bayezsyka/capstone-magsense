@@ -77,6 +77,9 @@ async def scan_frame(payload: ScanRequest):
     baby, adult, prepupa, pupa = 0, 0, 0, 0
     conf_scores: List[float] = []
     boxes_out = []
+    phase_conf_sums: Dict[str, float] = {"baby_larva": 0.0, "adult_larva": 0.0, "prepupa": 0.0, "pupa": 0.0}
+    phase_conf_counts: Dict[str, int] = {"baby_larva": 0, "adult_larva": 0, "prepupa": 0, "pupa": 0}
+    phase_key_map = {"Baby Larva": "baby_larva", "Adult Larva": "adult_larva", "Prepupa": "prepupa", "Pupa": "pupa"}
 
     for detection in detections:
         cls_id = detection["class_id"]
@@ -110,10 +113,22 @@ async def scan_frame(payload: ScanRequest):
             "class_id": cls_id
         })
 
+        phase_key = phase_key_map.get(canonical_cls)
+        if phase_key:
+            phase_conf_sums[phase_key] += conf
+            phase_conf_counts[phase_key] += 1
+
     total_detected = baby + adult + prepupa + pupa
     stages = {"BABY LARVA": baby, "ADULT LARVA": adult, "PREPUPA": prepupa, "PUPA": pupa}
     dominant_phase = max(stages, key=stages.get) if total_detected > 0 else "ADULT LARVA"
     avg_conf = round(float(sum(conf_scores) / len(conf_scores)), 4) if conf_scores else 0.85
+
+    phase_confidences = {
+        key: round(float(phase_conf_sums[key] / phase_conf_counts[key]), 4) if phase_conf_counts[key] > 0 else None
+        for key in phase_conf_sums
+    }
+    dominant_phase_key_map = {"BABY LARVA": "baby_larva", "ADULT LARVA": "adult_larva", "PREPUPA": "prepupa", "PUPA": "pupa"}
+    dominant_phase_confidence = phase_confidences.get(dominant_phase_key_map.get(dominant_phase, ""))
 
     proportions = {
         "baby_larva": round(baby / total_detected, 4) if total_detected > 0 else 0.0,
@@ -157,6 +172,8 @@ async def scan_frame(payload: ScanRequest):
         },
         "dominant_phase": dominant_phase,
         "confidence_score": avg_conf,
+        "phase_confidences": phase_confidences,
+        "dominant_phase_confidence": dominant_phase_confidence,
         "proportions": proportions,
         "harvest_prediction": {
             "estimated_days": predicted_days,
