@@ -1,0 +1,31 @@
+services:
+  ml:
+    build: .
+    container_name: ml-panen
+    restart: unless-stopped
+    ports:
+      # Hanya bisa diakses dari Pi itu sendiri (Express di host). Ganti ke "8000:8000"
+      # kalau perlu diakses dari perangkat lain di jaringan.
+      - "127.0.0.1:8000:8000"
+    environment:
+      MODEL_PATH: /app/model/harvest.json
+      DB_PATH: /data/prediksi.db          # kosongkan untuk mematikan pencatatan
+      MQTT_ENABLED: "false"               # ubah ke "true" kalau mau lewat MQTT
+      MQTT_HOST: host.docker.internal     # broker Mosquitto yang jalan di Pi
+      MQTT_PORT: "1883"
+      MQTT_USER: ""
+      MQTT_PASS: ""
+      MQTT_TOPIC_IN: maggot/fitur         # sesuaikan dengan topik di sistemmu
+      MQTT_TOPIC_OUT: maggot/prediksi
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./model:/app/model:ro             # taruh harvest.json di sini
+      - ./data:/data                      # prediksi.db (riwayat input + prediksi)
+    mem_limit: 512m
+    cpus: 1.0                             # sisakan CPU untuk YOLO/Hailo
+    logging:                              # cegah log memenuhi SD card
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

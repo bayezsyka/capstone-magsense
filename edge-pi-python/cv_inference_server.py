@@ -1,3 +1,4 @@
+import requests
 import base64
 import io
 import logging
@@ -142,13 +143,34 @@ async def scan_frame(payload: ScanRequest):
     rh_udara = float(sensor.get("kelembapan_udara_pct", 70.0))
     rh_media = float(sensor.get("kelembapan_media_pct", 65.0))
 
-    feature_names = [
-        "suhu_udara_c", "kelembapan_udara_pct", "kelembapan_media_pct",
-        "jumlah_baby_larva", "jumlah_adult_larva", "jumlah_prepupa", "jumlah_pupa"
-    ]
-    xgb_features = [[suhu, rh_udara, rh_media, float(baby), float(adult), float(prepupa), float(pupa)]]
-    dmatrix = xgb.DMatrix(xgb_features, feature_names=feature_names)
-    predicted_days = float(xgb_model.predict(dmatrix)[0])
+    predicted_days = None
+    try:
+        soil_adc = max(1000.0, min(4000.0, 3600.0 - (rh_media * 20.0)))
+        p_body = {
+            "suhu_udara_c": float(suhu),
+            "kelembapan_udara_pct": float(rh_udara),
+            "kelembapan_media_adc": float(soil_adc),
+            "jumlah_baby_larva": float(baby),
+            "jumlah_adult_larva": float(adult),
+            "jumlah_prepupa": float(prepupa),
+            "jumlah_pupa": float(pupa)
+        }
+        r = requests.post("http://127.0.0.1:8000/predict", json=p_body, timeout=1.5)
+        if r.status_code == 200:
+            predicted_days = float(r.json().get("hari_menuju_panen", 0))
+            logger.info(f"XGBoost prediction via ml-panen service: {predicted_days} days")
+    except Exception as e:
+        logger.warning(f"ml-panen service call fallback: {e}")
+
+    if predicted_days is None:
+        feature_names = [
+            "suhu_udara_c", "kelembapan_udara_pct", "kelembapan_media_pct",
+            "jumlah_baby_larva", "jumlah_adult_larva", "jumlah_prepupa", "jumlah_pupa"
+        ]
+        xgb_features = [[suhu, rh_udara, rh_media, float(baby), float(adult), float(prepupa), float(pupa)]]
+        dmatrix = xgb.DMatrix(xgb_features, feature_names=feature_names)
+        predicted_days = float(xgb_model.predict(dmatrix)[0])
+
     predicted_days = max(1.0, round(predicted_days, 1))
 
     if predicted_days <= 3.0:

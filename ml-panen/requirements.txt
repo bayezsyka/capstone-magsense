@@ -1,0 +1,7 @@
+fastapi>=0.110
+uvicorn>=0.29
+pandas>=2.0
+paho-mqtt>=2.0
+# Kunci ke versi yang dipakai di Colab agar identik, mis: xgboost==2.1.4
+# (cek di Colab: import xgboost; print(xgboost.__version__))
+xgboost>=2.1

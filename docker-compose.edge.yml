@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     ports:
       - "1883:1883"
-    command: sh -c "printf 'allow_anonymous true\nlistener 1883 0.0.0.0\n' > /mosquitto/config/mosquitto.conf && mosquitto -c /mosquitto/config/mosquitto.conf"
+    command: sh -c "printf 'allow_anonymous true\nlistener 1883 0.0.0.0\nset_tcp_nodelay true\nconnection_messages true\n' > /mosquitto/config/mosquitto.conf && mosquitto -c /mosquitto/config/mosquitto.conf"
 
   # === 2. MOCK IOT TELEMETRY (ESP32 SIMULATOR) ===
   mock-iot:

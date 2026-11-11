@@ -17,7 +17,25 @@ services:
       timeout: 3s
       retries: 5
 
-  # === 2. CENTRAL BACKEND (EXPRESS + WEBSOCKET) ===
+  # === 2. ML HARVEST PREDICTION (XGBOOST FASTAPI) ===
+  ml-panen:
+    build:
+      context: ./ml-panen
+      dockerfile: Dockerfile
+    container_name: capstone-central-ml-panen
+    restart: unless-stopped
+    ports:
+      - "${HOST_ML_PORT:-8000}:8000"
+    environment:
+      PORT: 8000
+      MODEL_PATH: /app/model/harvest.json
+      DB_PATH: /data/prediksi.db
+      MQTT_ENABLED: "false"
+    volumes:
+      - ./ml-panen/model:/app/model:ro
+      - ml_data:/data
+
+  # === 3. CENTRAL BACKEND (EXPRESS + WEBSOCKET) ===
   backend:
     build:
       context: ./backend-express
@@ -45,6 +63,7 @@ services:
       TILED_MIN_LONG_SIDE: ${TILED_MIN_LONG_SIDE:-720}
       TILE_SIZE: ${TILE_SIZE:-640}
       TILE_OVERLAP: ${TILE_OVERLAP:-0.25}
+      ML_SERVICE_URL: ${ML_SERVICE_URL:-http://ml-panen:8000/predict}
     volumes:
       - ./backend-express:/app
       - /app/node_modules
@@ -52,7 +71,7 @@ services:
       postgres:
         condition: service_healthy
 
-  # === 3. CENTRAL PUBLIC DASHBOARD (REACT) ===
+  # === 4. CENTRAL PUBLIC DASHBOARD (REACT) ===
   frontend:
     build:
       context: ./frontend-react
@@ -69,3 +88,4 @@ services:
 
 volumes:
   pgdata:
+  ml_data:
