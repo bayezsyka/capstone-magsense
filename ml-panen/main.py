@@ -1,145 +1,157 @@
-"""Layanan prediksi hari_menuju_panen (XGBoost) untuk Raspberry Pi.
-
-- HTTP : POST /predict  (dipanggil Express)    GET /health
-- MQTT : opsional (MQTT_ENABLED=true) - subscribe MQTT_TOPIC_IN, publish MQTT_TOPIC_OUT
-"""
 import json
 import logging
 import os
 import sqlite3
-import threading
-from contextlib import asynccontextmanager, closing
-from datetime import datetime, timezone
+from contextlib import asynccontextmanager
+from typing import Optional
 
 import pandas as pd
-from fastapi import FastAPI
-from pydantic import BaseModel, Field, ValidationError
-from xgboost import XGBRegressor
+import xgboost as xgb
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 
-# Urutan ini HARUS sama dengan FITUR saat training di Colab
-FITUR = ["suhu_udara_c", "kelembapan_udara_pct", "kelembapan_media_adc",
-         "jumlah_baby_larva", "jumlah_adult_larva", "jumlah_prepupa", "jumlah_pupa"]
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logger = logging.getLogger("ml-panen")
 
-MODEL_PATH = os.getenv("MODEL_PATH", "/app/model/harvest.json")
-DB_PATH = os.getenv("DB_PATH", "/data/prediksi.db")  # kosongkan untuk mematikan pencatatan
+FITUR = [
+    "suhu_udara_c",
+    "kelembapan_udara_pct",
+    "kelembapan_media_adc",
+    "jumlah_baby_larva",
+    "jumlah_adult_larva",
+    "jumlah_prepupa",
+    "jumlah_pupa",
+]
 
-MQTT_ENABLED = os.getenv("MQTT_ENABLED", "false").lower() == "true"
-MQTT_HOST = os.getenv("MQTT_HOST", "host.docker.internal")
-MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
-MQTT_USER = os.getenv("MQTT_USER", "")
-MQTT_PASS = os.getenv("MQTT_PASS", "")
-MQTT_TOPIC_IN = os.getenv("MQTT_TOPIC_IN", "maggot/fitur")
-MQTT_TOPIC_OUT = os.getenv("MQTT_TOPIC_OUT", "maggot/prediksi")
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-log = logging.getLogger("ml-panen")
-
-
-# ---------- Model ----------
-if not os.path.exists(MODEL_PATH):
-    raise RuntimeError(f"File model tidak ditemukan: {MODEL_PATH}. Taruh harvest.json di folder model/.")
-model = XGBRegressor()
-model.load_model(MODEL_PATH)
-_nama = model.get_booster().feature_names
-if _nama is not None and list(_nama) != FITUR:
-    raise RuntimeError(f"Nama/urutan fitur model {list(_nama)} tidak sama dengan FITUR {FITUR}")
-_lock = threading.Lock()
-
-
-# ---------- Validasi input (sesuaikan rentang dengan data sensor/dataset-mu) ----------
 class Fitur(BaseModel):
     suhu_udara_c: float = Field(ge=0, le=60, allow_inf_nan=False)
     kelembapan_udara_pct: float = Field(ge=0, le=100, allow_inf_nan=False)
-    kelembapan_media_adc: float = Field(ge=0, le=4095, allow_inf_nan=False)  # ADC ESP32 12-bit
+    kelembapan_media_adc: float = Field(ge=0, le=4095, allow_inf_nan=False)
     jumlah_baby_larva: float = Field(ge=0, allow_inf_nan=False)
     jumlah_adult_larva: float = Field(ge=0, allow_inf_nan=False)
     jumlah_prepupa: float = Field(ge=0, allow_inf_nan=False)
     jumlah_pupa: float = Field(ge=0, allow_inf_nan=False)
 
+class PrediksiOut(BaseModel):
+    hari_menuju_panen: float
 
-# ---------- Pencatatan SQLite (bahan retraining) ----------
-def init_db():
-    if not DB_PATH:
-        return
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    kolom = ", ".join(f"{c} REAL" for c in FITUR)
-    with closing(sqlite3.connect(DB_PATH, timeout=5)) as c, c:
-        c.execute(f"CREATE TABLE IF NOT EXISTS prediksi (id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                  f"waktu TEXT, sumber TEXT, {kolom}, prediksi REAL, hari_menuju_panen_aktual REAL)")
+class HealthOut(BaseModel):
+    status: str
+    model: str
+    mqtt: bool
 
+MODEL_PATH = os.getenv("MODEL_PATH", "/app/model/harvest.json")
+DB_PATH = os.getenv("DB_PATH", "/data/prediksi.db")
+MQTT_ENABLED = os.getenv("MQTT_ENABLED", "false").lower() in ("1", "true", "yes")
 
-def catat(f: Fitur, hari: float, sumber: str):
+if not os.path.exists(MODEL_PATH):
+    raise RuntimeError(f"File model tidak ditemukan: {MODEL_PATH}. Taruh harvest.json di folder model/.")
+
+model = xgb.Booster()
+model.load_model(MODEL_PATH)
+_nama = model.feature_names
+if _nama is not None and list(_nama) != FITUR:
+    logger.warning(f"Nama fitur model {_nama} berbeda dengan FITUR {FITUR}, akan disesuaikan")
+
+logger.info(f"Model XGBoost berhasil dimuat dari {MODEL_PATH}")
+
+def simpan_riwayat(fitur: dict, hari: float):
     if not DB_PATH:
         return
     try:
-        nilai = [getattr(f, c) for c in FITUR]
-        with closing(sqlite3.connect(DB_PATH, timeout=5)) as c, c:
-            c.execute(f"INSERT INTO prediksi (waktu, sumber, {', '.join(FITUR)}, prediksi) "
-                      f"VALUES (?, ?, {', '.join('?' * len(FITUR))}, ?)",
-                      [datetime.now(timezone.utc).isoformat(), sumber, *nilai, hari])
-    except Exception:
-        log.exception("Gagal mencatat ke SQLite (prediksi tetap dikembalikan)")
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS riwayat (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    suhu REAL, rh_udara REAL, rh_media_adc REAL,
+                    baby REAL, adult REAL, prepupa REAL, pupa REAL,
+                    hari_menuju_panen REAL
+                )
+            """)
+            conn.execute("""
+                INSERT INTO riwayat (suhu, rh_udara, rh_media_adc, baby, adult, prepupa, pupa, hari_menuju_panen)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                fitur["suhu_udara_c"], fitur["kelembapan_udara_pct"], fitur["kelembapan_media_adc"],
+                fitur["jumlah_baby_larva"], fitur["jumlah_adult_larva"], fitur["jumlah_prepupa"],
+                fitur["jumlah_pupa"], hari
+            ))
+    except Exception as e:
+        logger.error(f"Gagal simpan riwayat DB: {e}")
 
+def hitung_prediksi(data: Fitur) -> float:
+    row = data.model_dump()
+    df = pd.DataFrame([row])[FITUR]
+    dm = xgb.DMatrix(df, feature_names=FITUR)
+    nilai = float(model.predict(dm)[0])
+    return max(0.0, round(nilai, 2))
 
-def hitung(f: Fitur, sumber: str) -> float:
-    df = pd.DataFrame([f.model_dump()])[FITUR]
-    with _lock:
-        hari = float(model.predict(df)[0])
-    hari = round(max(hari, 0.0), 1)
-    catat(f, hari, sumber)
-    return hari
-
-
-# ---------- MQTT (opsional) ----------
-def mulai_mqtt():
-    import paho.mqtt.client as mqtt
-
-    c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="ml-panen")
-    if MQTT_USER:
-        c.username_pw_set(MQTT_USER, MQTT_PASS)
-
-    def on_connect(client, userdata, flags, reason_code, properties):
-        log.info("MQTT terhubung (%s); subscribe %s", reason_code, MQTT_TOPIC_IN)
-        client.subscribe(MQTT_TOPIC_IN, qos=1)
-
-    def on_message(client, userdata, msg):
-        try:
-            f = Fitur.model_validate_json(msg.payload)
-            hari = hitung(f, "mqtt")
-            client.publish(MQTT_TOPIC_OUT, json.dumps(
-                {"hari_menuju_panen": hari, "waktu": datetime.now(timezone.utc).isoformat()}),
-                qos=1, retain=True)
-        except ValidationError as e:
-            log.warning("Payload MQTT ditolak: %s", e.errors(include_url=False))
-        except Exception:
-            log.exception("Gagal memproses pesan MQTT")
-
-    c.on_connect, c.on_message = on_connect, on_message
-    c.reconnect_delay_set(1, 30)
-    c.connect_async(MQTT_HOST, MQTT_PORT, keepalive=60)  # tetap mencoba bila broker belum hidup
-    c.loop_start()
-    return c
-
+mqtt_client = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
-    mq = mulai_mqtt() if MQTT_ENABLED else None
-    log.info("Model dimuat: %s | MQTT: %s", MODEL_PATH, "aktif" if mq else "mati")
+    global mqtt_client
+    if MQTT_ENABLED:
+        try:
+            import paho.mqtt.client as mqtt_mod
+            host = os.getenv("MQTT_HOST", "host.docker.internal")
+            port = int(os.getenv("MQTT_PORT", "1883"))
+            topic_in = os.getenv("MQTT_TOPIC_IN", "maggot/fitur")
+            topic_out = os.getenv("MQTT_TOPIC_OUT", "maggot/prediksi")
+
+            client = mqtt_mod.Client(mqtt_mod.CallbackAPIVersion.VERSION2, client_id="ml-panen-sub")
+
+            def on_connect(c, userdata, flags, reason_code, properties):
+                logger.info(f"MQTT terhubung ({reason_code}), subscribe: {topic_in}")
+                c.subscribe(topic_in)
+
+            def on_message(c, userdata, msg):
+                try:
+                    payload = json.loads(msg.payload.decode())
+                    fitur = Fitur(**payload)
+                    hari = hitung_prediksi(fitur)
+                    simpan_riwayat(fitur.model_dump(), hari)
+                    out = json.dumps({"hari_menuju_panen": hari})
+                    c.publish(topic_out, out)
+                    logger.info(f"MQTT Prediksi: {hari} hari -> {topic_out}")
+                except Exception as e:
+                    logger.error(f"MQTT gagal proses: {e}")
+
+            client.on_connect = on_connect
+            client.on_message = on_message
+            client.connect(host, port, keepalive=60)
+            client.loop_start()
+            mqtt_client = client
+        except Exception as e:
+            logger.error(f"Gagal inisialisasi MQTT: {e}")
+
     yield
-    if mq:
-        mq.loop_stop()
-        mq.disconnect()
 
+    if mqtt_client is not None:
+        try:
+            mqtt_client.loop_stop()
+            mqtt_client.disconnect()
+        except Exception:
+            pass
 
-app = FastAPI(title="ML Prediksi Panen Maggot", lifespan=lifespan)
+app = FastAPI(title="ML Prediksi Panen Maggot", version="1.0.0", lifespan=lifespan)
 
-
-@app.post("/predict")
-def predict(f: Fitur):
-    return {"hari_menuju_panen": hitung(f, "http")}
-
-
-@app.get("/health")
+@app.get("/health", response_model=HealthOut)
 def health():
-    return {"status": "ok", "model": os.path.basename(MODEL_PATH), "mqtt": MQTT_ENABLED}
+    return HealthOut(
+        status="ok",
+        model=os.path.basename(MODEL_PATH),
+        mqtt=MQTT_ENABLED and mqtt_client is not None
+    )
+
+@app.post("/predict", response_model=PrediksiOut)
+def predict(fitur: Fitur):
+    try:
+        hari = hitung_prediksi(fitur)
+        simpan_riwayat(fitur.model_dump(), hari)
+        return PrediksiOut(hari_menuju_panen=hari)
+    except Exception as e:
+        logger.exception("Gagal menghitung prediksi")
+        raise HTTPException(status_code=500, detail=str(e))
