@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Save, AlertCircle, RotateCcw, Box, Thermometer, Droplets, Wind } from 'lucide-react';
-import { getThresholdByFloor, updateThresholds } from '../services/api';
+import { Save, AlertCircle, RotateCcw, Thermometer, Droplets, Wind } from 'lucide-react';
+import { getAllThresholds, updateThresholds } from '../services/api';
 import { useGlobalContext } from '../context/GlobalContext';
 import toast from 'react-hot-toast';
 
@@ -15,7 +15,6 @@ const DEFAULT_FORM = {
 
 export default function Thresholds() {
   const { user } = useGlobalContext();
-  const [activeTab, setActiveTab] = useState(1);
   const [form, setForm] = useState(DEFAULT_FORM);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -25,8 +24,10 @@ export default function Thresholds() {
     const fetchThresholds = async () => {
       setIsLoading(true);
       try {
-        const threshold = await getThresholdByFloor(activeTab, user?.tenant_id);
+        const thresholds = await getAllThresholds(user?.tenant_id ? { tenant_id: user.tenant_id } : {});
         if (!isMounted) return;
+
+        const threshold = Array.isArray(thresholds) && thresholds.length > 0 ? thresholds[0] : null;
 
         if (threshold) {
           setForm({
@@ -51,7 +52,7 @@ export default function Thresholds() {
 
     fetchThresholds();
     return () => { isMounted = false; };
-  }, [activeTab, user?.tenant_id]);
+  }, [user?.tenant_id]);
 
   const handleReset = () => {
     toast((t) => (
@@ -76,11 +77,11 @@ export default function Thresholds() {
       const payload = {
         temp_min: parseFloat(form.tempMin),
         temp_max: parseFloat(form.tempMax),
-        media_hum_min: activeTab === 4 ? null : parseFloat(form.mediaMin),
-        media_hum_max: activeTab === 4 ? null : parseFloat(form.mediaMax),
+        media_hum_min: parseFloat(form.mediaMin),
+        media_hum_max: parseFloat(form.mediaMax),
         air_hum_min: parseFloat(form.humAirMin),
         air_hum_max: parseFloat(form.humAirMax),
-        floor_level: activeTab
+        floor_level: 1
       };
 
       if (form.id) payload.id = form.id;
@@ -88,7 +89,7 @@ export default function Thresholds() {
 
       const saved = await updateThresholds(payload);
       if (saved?.id) setForm(prev => ({ ...prev, id: saved.id }));
-      toast.success(`Berhasil menyimpan perubahan untuk Ruang ${activeTab}!`, { id: loadId });
+      toast.success('Berhasil menyimpan perubahan parameter ambang!', { id: loadId });
     } catch (error) {
       toast.error('Gagal menyimpan perubahan: ' + (error.error || error.message), { id: loadId });
     }
@@ -104,37 +105,19 @@ export default function Thresholds() {
         </div>
         <div>
           <h4 className="text-sm font-black text-slate-800">
-            Panduan Konfigurasi Multi-Ruang
+            Panduan Konfigurasi Parameter Ambang
           </h4>
           <p className="text-xs text-slate-500 mt-1 font-medium leading-relaxed">
-            Pilih nomor Ruang terlebih dahulu sebelum mengubah parameter. Parameter di bawah ini akan menentukan kapan aktuator pada Ruang tersebut menyala secara otomatis.
+            Parameter di bawah ini akan menentukan kapan aktuator menyala secara otomatis. Pengaturan ini berlaku untuk seluruh sistem.
           </p>
         </div>
-      </div>
-
-      {/* TABS */}
-      <div className="flex flex-wrap gap-3 mb-4">
-        {[1, 2, 3, 4].map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-black transition-all border ${
-              activeTab === tab
-                ? 'bg-mag-green/10 text-mag-green border-mag-green/20'
-                : 'bg-white text-slate-400 border-slate-100 hover:bg-slate-50'
-            }`}
-          >
-            <Box size={14} />
-            RUANG {tab}
-          </button>
-        ))}
       </div>
 
       {/* CARD SETTINGS */}
       <div className="bg-white/90 backdrop-blur-sm p-8 rounded-3xl shadow-soft border border-white/50 transition-all duration-300">
         <div className="mb-8 inline-block px-4 py-1.5 bg-mag-green/10 rounded-full">
           <span className="text-xs font-black text-mag-green uppercase tracking-wider">
-            RUANG KANDANG {activeTab}
+            PENGATURAN AMBANG OTOMATIS
           </span>
         </div>
 
@@ -169,13 +152,12 @@ export default function Thresholds() {
             </div>
           </div>
 
-          {/* KELEMBAPAN MEDIA (Hide for Ruang 4) */}
-          {activeTab !== 4 && (
-            <div className="space-y-4">
-              <h3 className="text-sm font-black text-blue-500 uppercase tracking-wider flex items-center gap-2">
-                <Droplets size={18} />
-                AMBANG KELEMBAPAN MEDIA
-              </h3>
+          {/* KELEMBAPAN MEDIA */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-black text-blue-500 uppercase tracking-wider flex items-center gap-2">
+              <Droplets size={18} />
+              AMBANG KELEMBAPAN MEDIA
+            </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Kelembapan Min (%)</label>
@@ -198,8 +180,7 @@ export default function Thresholds() {
                   <p className="text-[10px] text-slate-400 font-medium italic">Menghentikan penyiraman otomatis.</p>
                 </div>
               </div>
-            </div>
-          )}
+          </div>
 
           {/* KELEMBAPAN UDARA */}
           <div className="space-y-4">
@@ -247,7 +228,7 @@ export default function Thresholds() {
               className="w-full md:w-auto px-8 py-3 bg-mag-green hover:bg-emerald-600 text-white font-black rounded-xl flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-emerald-500/30 text-sm disabled:opacity-50"
             >
               <Save size={16} />
-              SIMPAN Ruang {activeTab}
+              SIMPAN PARAMETER
             </button>
           </div>
         </form>

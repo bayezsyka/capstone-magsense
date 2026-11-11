@@ -32,7 +32,7 @@ const BOX_CLASS_TO_KEY = {
 const formatConfidence = (value) => {
   const num = Number(value);
   if (!Number.isFinite(num) || num <= 0) return "-";
-  return `${(num * 100).toFixed(2).replace(".", ",")}%`;
+  return num.toFixed(2).replace(".", ",");
 };
 
 const computePhaseConfidences = (boxes) => {
