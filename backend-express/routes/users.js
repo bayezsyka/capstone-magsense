@@ -13,8 +13,8 @@ router.put('/profile', verifyToken, usersController.updateProfile);
 router.put('/profile/password', verifyToken, usersController.updatePassword);
 
 // Management endpoints
-router.get('/', verifyToken, usersController.getAllUsers);
-router.get('/:id', verifyToken, usersController.getUserById);
+router.get('/', verifyToken, requireAdmin, usersController.getAllUsers);
+router.get('/:id', verifyToken, requireAdmin, usersController.getUserById);
 router.post('/', verifyToken, requireAdmin, validate(schemas.userRegistration), usersController.createUser);
 router.put('/:id', verifyToken, requireAdmin, validate(schemas.userUpdate), usersController.updateUser);
 router.delete('/:id', verifyToken, requireAdmin, usersController.deleteUser);
