@@ -25,15 +25,23 @@ def _env_float(name: str, default: float) -> float:
 
 CONF = _env_float("YOLO_CONF", 0.25)
 IOU = _env_float("YOLO_IOU", 0.6)
-IMGSZ = _env_int("YOLO_IMGSZ", 1280)
+# Must match TRAIN_IMGSZ=960 used to train best.pt (capstone5.ipynb, run
+# maggot_yolov8n_v22) so production inference sees the same object scale.
+IMGSZ = _env_int("YOLO_IMGSZ", 960)
 MAX_DET = _env_int("YOLO_MAX_DET", 3000)
 AUGMENT = os.getenv("YOLO_AUGMENT", "false").lower() in {"1", "true", "yes"}
 
 # Model class ids: 0 Adult, 1 Baby, 2 Prepupa, 3 Pupa.
-# Lower thresholds for the visually smaller/less confident stages prevent Adult
-# Larva from winning solely because it has systematically higher confidence.
+# Calibrated from the validation-threshold sweep in capstone5.ipynb (cell 12D,
+# F1-optimal per class on the validation set): Adult 0.90, Baby 0.50,
+# Prepupa 0.78, Pupa 0.47. Production defaults below are a compromise between
+# those peaks and recall: valid detections typically score >=0.75, while
+# low-confidence noise on substrate/shaded areas (0.30-0.68) is suppressed.
+# Prepupa has the weakest precision (test P=0.79, Prepupa<->Pupa confusion), so
+# its threshold is kept clearly above the noise band. Override per class via
+# YOLO_CLASS_CONF, e.g. '{"0": 0.9, "2": 0.78}'.
 def _class_thresholds() -> Dict[int, float]:
-    defaults = {0: 0.55, 1: 0.30, 2: 0.30, 3: 0.30}
+    defaults = {0: 0.65, 1: 0.45, 2: 0.70, 3: 0.45}
     try:
         values = json.loads(os.getenv("YOLO_CLASS_CONF", "{}"))
         for key, value in values.items():
@@ -45,8 +53,18 @@ def _class_thresholds() -> Dict[int, float]:
     return defaults
 
 CLASS_CONF = _class_thresholds()
-TILED_MIN_LONG_SIDE = _env_int("TILED_MIN_LONG_SIDE", 720)
-TILE_SIZE = _env_int("TILE_SIZE", 640)
+# Tiling (slice + per-tile predict) hanya menguntungkan untuk gambar ber-
+# resolusi tinggi (foto unggahan >= ~1920px): recall naik karena objek tetap
+# pada skala training. Untuk frame webcam C270 (1280x720), benchmark CPU
+# (bench_webcam_v2) menunjukkan tiled 960/960 2-3x lebih lambat (573-826 ms
+# vs 272-295 ms single) tanpa peningkatan deteksi yang berarti, dan pada
+# full-tray 720p tiled justru kehilangan seluruh deteksi karena objek mengecil
+# di bawah skala training. 1920 memastikan frame webcam lewat jalur single
+# yang cepat, sementara foto high-res tetap di-tile.
+TILED_MIN_LONG_SIDE = _env_int("TILED_MIN_LONG_SIDE", 1920)
+# 960 matches TRAIN_IMGSZ of best.pt, so each tile is fed at its native
+# training scale (no upscale/downscale distortion at tile edges).
+TILE_SIZE = _env_int("TILE_SIZE", 960)
 TILE_OVERLAP = min(0.8, max(0.05, _env_float("TILE_OVERLAP", 0.25)))
 BORDER_PX = _env_int("TILE_BORDER_PX", 6)
 NMS_IOU = _env_float("TILE_NMS_IOU", 0.5)

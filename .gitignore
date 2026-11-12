@@ -83,3 +83,6 @@ known_hosts
 # === MISC ===
 *.tmp
 *.bak
+
+# === CV DIAGNOSTIC OUTPUTS (generated annotated images) ===
+diagnose_out/
