@@ -10,6 +10,19 @@ from aiohttp import web
 from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from av import VideoFrame
 from local_db import init_db, get_db_connection
+# Shared inference settings (thresholds, NMS IoU) so the live-camera path uses
+# the same filtering behavior as the /scan endpoint in cv_inference_server.py.
+from inference import CONF, IOU, CLASS_CONF
+
+# Live-camera inference size. Defaults to 960 to match TRAIN_IMGSZ=960 used to
+# train best.pt (capstone5.ipynb, run maggot_yolov8n_v22) so live frames are
+# evaluated at the same object scale as the test metrics (test recall for the
+# smallest class, Baby Larva, is the most sensitive to scale mismatch).
+# Override via YOLO_IMGSZ_LIVE if the edge device is too slow.
+try:
+    LIVE_IMGSZ = max(320, int(os.getenv("YOLO_IMGSZ_LIVE", "960")))
+except (TypeError, ValueError):
+    LIVE_IMGSZ = 960
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [WEBRTC NATIVE] - %(message)s")
 
@@ -116,12 +129,15 @@ class CameraVideoStreamTrack(VideoStreamTrack):
 
         if model is not None and frame is not None and (self.cap and self.cap.isOpened()):
             try:
-                results = model.predict(source=frame, conf=0.25, verbose=False)
+                results = model.predict(source=frame, conf=CONF, iou=IOU, imgsz=LIVE_IMGSZ, verbose=False)
                 if results and len(results) > 0:
                     boxes = results[0].boxes
                     for i in range(len(boxes)):
                         cls_id = int(boxes.cls[i])
                         conf = float(boxes.conf[i])
+                        # Per-class threshold, same as inference._result_boxes()
+                        if conf < CLASS_CONF.get(cls_id, CONF):
+                            continue
                         conf_scores.append(conf)
                         cls_name = model.names.get(cls_id, "").upper()
                         if "BABY" in cls_name:
