@@ -108,8 +108,18 @@ CREATE TABLE IF NOT EXISTS public.notifications (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid REFERENCES public.tenants(id) ON DELETE CASCADE,
     message text,
+    notification_type character varying(50) DEFAULT 'info',
+    target_role character varying(50) DEFAULT 'all',
+    severity character varying(20) DEFAULT 'info',
+    box_id uuid REFERENCES public.boxes(id) ON DELETE CASCADE,
     is_read boolean DEFAULT false,
     "timestamp" timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS notification_type character varying(50) DEFAULT 'info';
+ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS target_role character varying(50) DEFAULT 'all';
+ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS severity character varying(20) DEFAULT 'info';
+ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS box_id uuid REFERENCES public.boxes(id) ON DELETE CASCADE;
 );
 
 -- SEED INITIAL DEFAULT DATA

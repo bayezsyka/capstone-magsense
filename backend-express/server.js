@@ -53,6 +53,8 @@ app.set('io', io);
 const PORT = process.env.PORT || 5000;
 
 const { verifyToken } = require('./middlewares/auth');
+const jwt = require('jsonwebtoken');
+const { JWT_SECRET } = require('./config');
 
 // Routes
 const tenantsRoutes = require('./routes/tenants');
@@ -90,8 +92,22 @@ app.get(['/', '/api/health'], (req, res) => {
   res.json({ message: 'Smart Farming Central API is active', status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-// Socket.io connection logging
+// Authenticate Socket.IO clients and place them in role/tenant rooms.
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error('Token otorisasi diperlukan'));
+    socket.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch (error) {
+    next(new Error('Token tidak valid'));
+  }
+});
+
 io.on('connection', (socket) => {
+  const role = String(socket.user?.role || '').toLowerCase();
+  if (role && socket.user?.tenant_id) socket.join(`role:${role}:tenant:${socket.user.tenant_id}`);
+  if (socket.user?.tenant_id) socket.join(`tenant:${socket.user.tenant_id}`);
   console.log(`[SOCKET] Client connected: ${socket.id}`);
   socket.on('disconnect', () => {
     console.log(`[SOCKET] Client disconnected: ${socket.id}`);
