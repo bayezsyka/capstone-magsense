@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Save, AlertCircle, RotateCcw, Thermometer, Droplets, Wind } from 'lucide-react';
 import { getAllThresholds, updateThresholds } from '../services/api';
-import { useGlobalContext } from '../context/GlobalContext';
+import { useGlobalContext } from '../context/useGlobalContext';
 import toast from 'react-hot-toast';
 
 const DEFAULT_FORM = {

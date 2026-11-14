@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Users, UserPlus, RefreshCw, Pencil, Trash2, PlusCircle, Building2, Check, X } from 'lucide-react';
+import { Users, RefreshCw, Pencil, Trash2, PlusCircle, Building2, Check, X } from 'lucide-react';
 import { 
   getAllUsers, createUser, updateUser, deleteUser,
   getAllTenants, createTenant, updateTenant, deleteTenant
@@ -15,7 +15,7 @@ export default function ManajemenPengguna() {
   const [modal, setModal] = useState({ isOpen: false, type: 'add', data: null });
 
   // Fetch Data
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       if (activeTab === 'users') {
@@ -30,11 +30,13 @@ export default function ManajemenPengguna() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [activeTab]);
 
   useEffect(() => {
+    // Data loading intentionally updates state after the asynchronous request completes.
+    // oxlint-disable-next-line react/set-state-in-effect
     fetchData();
-  }, [activeTab]);
+  }, [fetchData]);
 
   // Lock background scroll while modal is open
   useEffect(() => {

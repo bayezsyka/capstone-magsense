@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import useWebSocket from '../hooks/useWebSocket';
 import useBoxOverview from '../hooks/useBoxOverview';
-import { useGlobalContext } from '../context/GlobalContext';
+import { useGlobalContext } from '../context/useGlobalContext';
 import { getSensorHistory } from '../services/api';
 import { Package, ThermometerSun, Zap } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';

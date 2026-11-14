@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useGlobalContext } from '../context/GlobalContext';
+import { useGlobalContext } from '../context/useGlobalContext';
 import { Link, useLocation } from 'react-router-dom';
-import { Bell, ChevronRight, CheckCircle2, Menu } from 'lucide-react';
+import { Bell, ChevronRight, CheckCircle2, Menu, AlertTriangle, Info, Siren } from 'lucide-react';
 import { getAllNotifications, markNotificationAsRead } from '../services/api';
 import toast from 'react-hot-toast';
 
 const TopNav = ({ onMenuClick }) => {
-  const { user } = useGlobalContext();
+  const { user, refreshVersion } = useGlobalContext();
   const location = useLocation();
   
   const [notifications, setNotifications] = useState([]);
@@ -38,6 +38,8 @@ const TopNav = ({ onMenuClick }) => {
   };
 
   useEffect(() => {
+    // Notification refresh intentionally updates state after the asynchronous request.
+    // oxlint-disable-next-line react/set-state-in-effect
     fetchNotif();
     // Click outside to close
     const handleClickOutside = (e) => {
@@ -47,13 +49,19 @@ const TopNav = ({ onMenuClick }) => {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [refreshVersion]);
+
+  const severityMeta = {
+    critical: { icon: Siren, className: 'text-red-600 bg-red-50', label: 'Kritis' },
+    warning: { icon: AlertTriangle, className: 'text-amber-600 bg-amber-50', label: 'Peringatan' },
+    info: { icon: Info, className: 'text-blue-600 bg-blue-50', label: 'Info' }
+  };
 
   const handleMarkAsRead = async (id) => {
     try {
       await markNotificationAsRead(id);
       fetchNotif();
-    } catch (e) {
+    } catch {
       toast.error('Gagal menandai notifikasi');
     }
   };
@@ -85,7 +93,7 @@ const TopNav = ({ onMenuClick }) => {
           >
             <Bell size={20} />
             {unreadCount > 0 && (
-              <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+              <span className="absolute -top-1 -right-2 min-w-4 h-4 px-1 bg-red-500 text-white text-[9px] font-black rounded-full border-2 border-white flex items-center justify-center">{unreadCount > 99 ? '99+' : unreadCount}</span>
             )}
           </button>
 
@@ -101,22 +109,31 @@ const TopNav = ({ onMenuClick }) => {
                   <div className="p-6 text-center text-slate-400 text-sm">Belum ada notifikasi</div>
                 ) : (
                   <div className="divide-y divide-slate-50">
-                    {notifications.map(n => (
-                      <div key={n.id} className={`p-4 hover:bg-slate-50 transition-colors ${!n.is_read ? 'bg-emerald-50/30' : ''}`}>
-                        <p className={`text-xs ${!n.is_read ? 'font-bold text-slate-800' : 'text-slate-500'}`}>{n.message}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-[10px] text-slate-400">{new Date(n.timestamp).toLocaleString()}</span>
-                          {!n.is_read && (
-                            <button 
-                              onClick={() => handleMarkAsRead(n.id)}
-                              className="text-[10px] text-mag-green flex items-center gap-1 font-bold hover:text-emerald-700"
-                            >
-                              <CheckCircle2 size={12} /> Tandai dibaca
-                            </button>
-                          )}
+                    {notifications.map(n => {
+                      const meta = severityMeta[n.severity] || severityMeta.info;
+                      const SeverityIcon = meta.icon;
+                      return (
+                        <div key={n.id} className={`p-4 hover:bg-slate-50 transition-colors ${!n.is_read ? 'bg-emerald-50/30' : ''}`}>
+                          <div className="flex gap-2 items-start">
+                            <span className={`p-1.5 rounded-lg shrink-0 ${meta.className}`} title={meta.label}>
+                              <SeverityIcon size={14} />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className={`text-[10px] uppercase tracking-wide mb-1 ${meta.className.split(' ')[0]}`}>{meta.label} · {n.notification_type || 'info'}</p>
+                              <p className={`text-xs ${!n.is_read ? 'font-bold text-slate-800' : 'text-slate-500'}`}>{n.message}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between mt-2">
+                            <span className="text-[10px] text-slate-400">{new Date(n.timestamp).toLocaleString()}</span>
+                            {!n.is_read && (
+                              <button onClick={() => handleMarkAsRead(n.id)} className="text-[10px] text-mag-green flex items-center gap-1 font-bold hover:text-emerald-700">
+                                <CheckCircle2 size={12} /> Tandai dibaca
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useGlobalContext } from '../context/GlobalContext';
+import { useGlobalContext } from '../context/useGlobalContext';
 import useWebSocket from './useWebSocket';
 import {
   getAllBoxes,
@@ -195,6 +195,8 @@ export default function useBoxOverview({
   }, [includePrediction, includeCv, includeSensorData]);
 
   useEffect(() => {
+    // Data loading intentionally updates state after the asynchronous request.
+    // oxlint-disable-next-line react/set-state-in-effect
     fetchData();
   }, [fetchData]);
 

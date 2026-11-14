@@ -1,7 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { GlobalContext } from "./GlobalContext.js";
 import { io } from "socket.io-client";
-
-const GlobalContext = createContext();
 
 const getSocketUrl = () => {
   if (import.meta.env.DEV) return undefined;
@@ -74,8 +73,10 @@ export const GlobalProvider = ({ children }) => {
     newSocket.on("new_harvest_predictions", bumpRefresh);
     newSocket.on("new_cv_results", bumpRefresh);
     newSocket.on("new_actuator_logs", bumpRefresh);
+    newSocket.on("new_notification", bumpRefresh);
     newSocket.on("cv_update", bumpRefresh);
 
+    // oxlint-disable-next-line react/set-state-in-effect
     setSocket(newSocket);
 
     return () => {
@@ -85,6 +86,7 @@ export const GlobalProvider = ({ children }) => {
       newSocket.off("new_harvest_predictions");
       newSocket.off("new_cv_results");
       newSocket.off("new_actuator_logs");
+      newSocket.off("new_notification");
       newSocket.off("cv_update");
       newSocket.disconnect();
     };
@@ -106,12 +108,4 @@ export const GlobalProvider = ({ children }) => {
       {children}
     </GlobalContext.Provider>
   );
-};
-
-export const useGlobalContext = () => {
-  const context = useContext(GlobalContext);
-  if (!context) {
-    throw new Error("useGlobalContext must be used within a GlobalProvider");
-  }
-  return context;
 };

@@ -256,6 +256,8 @@ export default function HistoryPage() {
   }, [activeTab, page, pageSize, search, boxFilter, startDate, endDate, boxNameMap]);
 
   useEffect(() => {
+    // Data loading intentionally updates state after the asynchronous request.
+    // oxlint-disable-next-line react/set-state-in-effect
     fetchData();
   }, [fetchData]);
 

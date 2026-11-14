@@ -29,6 +29,8 @@ export default function ManajemenBox() {
   };
 
   useEffect(() => {
+    // Data loading intentionally updates state after the asynchronous request.
+    // oxlint-disable-next-line react/set-state-in-effect
     fetchData();
   }, []);
 

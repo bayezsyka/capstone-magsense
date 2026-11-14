@@ -2,7 +2,7 @@ import React from "react";
 import { LayoutDashboard, Thermometer, Sprout, History, Settings, LogOut, Activity, Users, X } from "lucide-react";
 import { useNavigate, NavLink } from "react-router-dom";
 import maggotLogo from "../assets/maggot.png";
-import { useGlobalContext } from "../context/GlobalContext";
+import { useGlobalContext } from "../context/useGlobalContext";
 
 const Sidebar = ({ isOpen, setIsOpen }) => {
   const navigate = useNavigate();

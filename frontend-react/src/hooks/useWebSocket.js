@@ -1,4 +1,4 @@
-import { useGlobalContext } from '../context/GlobalContext';
+import { useGlobalContext } from '../context/useGlobalContext';
 
 const useWebSocket = () => {
   const { realtimeData, isConnected, socket } = useGlobalContext();

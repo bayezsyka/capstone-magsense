@@ -4,7 +4,6 @@ import {
   CameraOff,
   RefreshCw,
   Play,
-  Square,
   Upload,
   Layers,
   Clock,

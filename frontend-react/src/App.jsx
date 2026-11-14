@@ -12,7 +12,8 @@ import ManajemenPengguna from "./pages/ManajemenPengguna";
 import ManajemenBox from "./pages/ManajemenBox";
 import AppLayout from "./components/AppLayout";
 
-import { GlobalProvider, useGlobalContext } from "./context/GlobalContext";
+import { GlobalProvider } from "./context/GlobalContext.jsx";
+import { useGlobalContext } from "./context/useGlobalContext";
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, token } = useGlobalContext();
@@ -21,24 +22,19 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/login" replace />;
   }
 
-  try {
-    if (allowedRoles && allowedRoles.length > 0) {
-      const userRole = (user.role || "").toLowerCase();
-      const rolesNormalized = allowedRoles.map(r => r.toLowerCase());
-      
-      if (!rolesNormalized.includes(userRole)) {
-        if (userRole === "admin") {
-           return <Navigate to="/manajemen-pengguna" replace />;
-        } else {
-           return <Navigate to="/dashboard" replace />;
-        }
+  if (allowedRoles && allowedRoles.length > 0) {
+    const userRole = (user.role || "").toLowerCase();
+    const rolesNormalized = allowedRoles.map(r => r.toLowerCase());
+
+    if (!rolesNormalized.includes(userRole)) {
+      if (userRole === "admin") {
+        return <Navigate to="/manajemen-pengguna" replace />;
       }
+      return <Navigate to="/dashboard" replace />;
     }
-    
-    return children;
-  } catch (e) {
-    return <Navigate to="/login" replace />;
   }
+
+  return children;
 };
 
 import { Toaster } from "react-hot-toast";

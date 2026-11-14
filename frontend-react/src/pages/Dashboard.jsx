@@ -1,7 +1,7 @@
 import React from 'react';
 import useWebSocket from '../hooks/useWebSocket';
 import useBoxOverview from '../hooks/useBoxOverview';
-import { useGlobalContext } from '../context/GlobalContext';
+import { useGlobalContext } from '../context/useGlobalContext';
 import { Activity, Zap, Wind, Droplets, Thermometer, Sprout, Box as BoxIcon, Radio } from 'lucide-react';
 import SkeletonCard from '../components/SkeletonCard';
 import ErrorBoundary from '../components/ErrorBoundary';
