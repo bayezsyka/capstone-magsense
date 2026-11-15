@@ -25,23 +25,23 @@ def _env_float(name: str, default: float) -> float:
 
 CONF = _env_float("YOLO_CONF", 0.25)
 IOU = _env_float("YOLO_IOU", 0.6)
-# Must match TRAIN_IMGSZ=960 used to train best.pt (capstone5.ipynb, run
-# maggot_yolov8n_v22) so production inference sees the same object scale.
+# Must match TRAIN_IMGSZ=960 used to train best.pt (capstone6_v27.ipynb, run
+# maggot_yolov8n_v27-2) so production inference sees the same object scale.
 IMGSZ = _env_int("YOLO_IMGSZ", 960)
 MAX_DET = _env_int("YOLO_MAX_DET", 3000)
 AUGMENT = os.getenv("YOLO_AUGMENT", "false").lower() in {"1", "true", "yes"}
 
 # Model class ids: 0 Adult, 1 Baby, 2 Prepupa, 3 Pupa.
-# Calibrated from the validation-threshold sweep in capstone5.ipynb (cell 12D,
-# F1-optimal per class on the validation set): Adult 0.90, Baby 0.50,
-# Prepupa 0.78, Pupa 0.47. Production defaults below are a compromise between
-# those peaks and recall: valid detections typically score >=0.75, while
-# low-confidence noise on substrate/shaded areas (0.30-0.68) is suppressed.
-# Prepupa has the weakest precision (test P=0.79, Prepupa<->Pupa confusion), so
-# its threshold is kept clearly above the noise band. Override per class via
-# YOLO_CLASS_CONF, e.g. '{"0": 0.9, "2": 0.78}'.
+# Calibrated for best.pt v27 (run maggot_yolov8n_v27-2) from 12D-KOREKSI in
+# capstone6_v27lanjutan.ipynb: precision/recall computed AT each threshold on
+# the validation set (not the F1-max curve point). Adult recall is flat 0.895
+# across all thresholds, so 0.60 cuts false positives at zero recall cost
+# (P 0.986); Baby 0.50 balances P 0.933 / R 0.939; Prepupa is kept low (0.25)
+# to maximise recall for the improvement target (P 0.831, R 0.831); Pupa 0.40
+# (P 0.897, R 0.915). All >= the 0.80 precision requirement. Override per
+# class via YOLO_CLASS_CONF, e.g. '{"0": 0.6, "2": 0.25}'.
 def _class_thresholds() -> Dict[int, float]:
-    defaults = {0: 0.65, 1: 0.45, 2: 0.70, 3: 0.45}
+    defaults = {0: 0.60, 1: 0.50, 2: 0.25, 3: 0.40}
     try:
         values = json.loads(os.getenv("YOLO_CLASS_CONF", "{}"))
         for key, value in values.items():

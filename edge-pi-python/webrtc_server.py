@@ -15,9 +15,9 @@ from local_db import init_db, get_db_connection
 from inference import CONF, IOU, CLASS_CONF
 
 # Live-camera inference size. Defaults to 960 to match TRAIN_IMGSZ=960 used to
-# train best.pt (capstone5.ipynb, run maggot_yolov8n_v22) so live frames are
-# evaluated at the same object scale as the test metrics (test recall for the
-# smallest class, Baby Larva, is the most sensitive to scale mismatch).
+# train best.pt (capstone6_v27.ipynb, run maggot_yolov8n_v27-2) so live frames
+# are evaluated at the same object scale as the test metrics (test recall for
+# the smallest class, Baby Larva, is the most sensitive to scale mismatch).
 # Override via YOLO_IMGSZ_LIVE if the edge device is too slow.
 try:
     LIVE_IMGSZ = max(320, int(os.getenv("YOLO_IMGSZ_LIVE", "960")))
