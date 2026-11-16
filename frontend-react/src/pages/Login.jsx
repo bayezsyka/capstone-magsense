@@ -23,7 +23,7 @@ const Login = () => {
       const data = await loginUser(email, password);
       // Panggil fungsi login dari Context
       login(data.user, data.token);
-      
+
       if (data.user.role && data.user.role.toLowerCase() === 'admin') {
         navigate('/manajemen-pengguna');
       } else {
@@ -59,7 +59,7 @@ const Login = () => {
 
       <div className="bg-white/90 backdrop-blur-md rounded-3xl p-8 w-full max-w-md shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/50 relative z-10">
         <h2 className="text-2xl font-black text-slate-800 mb-6 text-center">Selamat Datang</h2>
-        
+
         {errorMsg && (
           <div className="bg-red-50 border border-red-100 text-red-500 text-sm font-bold px-4 py-3 rounded-2xl mb-6">
             {errorMsg}
@@ -71,10 +71,10 @@ const Login = () => {
             <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-wider">Email</label>
             <div className="relative">
               <span className="absolute inset-y-0 left-0 flex items-center pl-4">
-                 <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"></path></svg>
+                <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"></path></svg>
               </span>
-              <input 
-                type="email" 
+              <input
+                type="email"
                 className="w-full bg-slate-50 border border-slate-100 text-slate-800 font-bold rounded-2xl pl-12 px-4 py-3.5 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-mag-green transition-all"
                 placeholder="nama@email.com"
                 value={email}
@@ -90,8 +90,8 @@ const Login = () => {
               <span className="absolute inset-y-0 left-0 flex items-center pl-4">
                 <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
               </span>
-              <input 
-                type="password" 
+              <input
+                type="password"
                 className="w-full bg-slate-50 border border-slate-100 text-slate-800 font-bold rounded-2xl pl-12 px-4 py-3.5 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-mag-green transition-all"
                 placeholder="••••••••"
                 value={password}
@@ -115,12 +115,12 @@ const Login = () => {
             </button>
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={isLoading}
             className="w-full bg-gradient-to-r from-mag-green to-emerald-400 hover:from-emerald-500 hover:to-emerald-600 text-white font-black py-4 px-4 rounded-2xl shadow-glow transition-all hover:shadow-lg hover:-translate-y-0.5 flex justify-center items-center mt-4 disabled:opacity-50"
           >
-            {isLoading ? 'MEMPROSES...' : 'MASUK KE SISTEM'} 
+            {isLoading ? 'MEMPROSES...' : 'MASUK KE SISTEM'}
             {!isLoading && <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>}
           </button>
         </form>
@@ -156,9 +156,9 @@ const Login = () => {
                 <span aria-hidden="true" className="text-2xl leading-none">×</span>
               </button>
             </div>
-            <p className="text-sm font-medium leading-6 text-slate-600">
+            <p className="text-sm font-medium leading-6 text-slate-600 text-justify">
               Untuk keamanan akun, reset password dilakukan oleh administrator sistem.
-              Silakan hubungi admin agar password akun Anda dapat diperbarui melalui menu Manajemen Pengguna.
+              Silakan hubungi admin agar password akun Anda dapat diperbarui oleh admin.
             </p>
             <button
               type="button"
