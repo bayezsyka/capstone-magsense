@@ -11,6 +11,7 @@ const Login = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const { login } = useGlobalContext();
 
@@ -105,7 +106,13 @@ const Login = () => {
               <input type="checkbox" className="rounded border-slate-200 text-mag-green focus:ring-mag-green bg-white" />
               <span className="text-slate-500 font-medium hover:text-slate-700 transition-colors">Ingat saya</span>
             </label>
-            <a href="#" className="text-mag-green font-bold hover:text-green-600 transition-colors">Lupa Password?</a>
+            <button
+              type="button"
+              onClick={() => setShowForgotPassword(true)}
+              className="text-mag-green font-bold hover:text-green-600 transition-colors"
+            >
+              Lupa Password?
+            </button>
           </div>
 
           <button 
@@ -118,6 +125,51 @@ const Login = () => {
           </button>
         </form>
       </div>
+
+      {showForgotPassword && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowForgotPassword(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="forgot-password-title"
+            className="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl"
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="mb-2 text-xs font-black uppercase tracking-widest text-mag-green">Bantuan akun</p>
+                <h2 id="forgot-password-title" className="text-2xl font-black text-slate-800">
+                  Lupa Password?
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowForgotPassword(false)}
+                aria-label="Tutup informasi lupa password"
+                className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              >
+                <span aria-hidden="true" className="text-2xl leading-none">×</span>
+              </button>
+            </div>
+            <p className="text-sm font-medium leading-6 text-slate-600">
+              Untuk keamanan akun, reset password dilakukan oleh administrator sistem.
+              Silakan hubungi admin agar password akun Anda dapat diperbarui melalui menu Manajemen Pengguna.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowForgotPassword(false)}
+              className="mt-6 w-full rounded-2xl bg-gradient-to-r from-mag-green to-emerald-400 px-4 py-3.5 font-black text-white shadow-glow transition-all hover:from-emerald-500 hover:to-emerald-600"
+            >
+              Mengerti
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-12 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest relative z-10">
         <p>© 2026 MAG-SENSE Project.</p>
