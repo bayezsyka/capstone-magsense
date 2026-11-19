@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 from ultralytics import YOLO
@@ -25,23 +25,22 @@ def _env_float(name: str, default: float) -> float:
 
 CONF = _env_float("YOLO_CONF", 0.25)
 IOU = _env_float("YOLO_IOU", 0.6)
-# Must match TRAIN_IMGSZ=960 used to train best.pt (capstone6_v27.ipynb, run
-# maggot_yolov8n_v27-2) so production inference sees the same object scale.
+# Must match TRAIN_IMGSZ=960 used to train best.pt (capstone6_v28.ipynb, run
+# maggot_yolov8n_v28) so production inference sees the same object scale.
 IMGSZ = _env_int("YOLO_IMGSZ", 960)
 MAX_DET = _env_int("YOLO_MAX_DET", 3000)
 AUGMENT = os.getenv("YOLO_AUGMENT", "false").lower() in {"1", "true", "yes"}
 
 # Model class ids: 0 Adult, 1 Baby, 2 Prepupa, 3 Pupa.
-# Calibrated for best.pt v27 (run maggot_yolov8n_v27-2) from 12D-KOREKSI in
-# capstone6_v27lanjutan.ipynb: precision/recall computed AT each threshold on
-# the validation set (not the F1-max curve point). Adult recall is flat 0.895
-# across all thresholds, so 0.60 cuts false positives at zero recall cost
-# (P 0.986); Baby 0.50 balances P 0.933 / R 0.939; Prepupa is kept low (0.25)
-# to maximise recall for the improvement target (P 0.831, R 0.831); Pupa 0.40
-# (P 0.897, R 0.915). All >= the 0.80 precision requirement. Override per
-# class via YOLO_CLASS_CONF, e.g. '{"0": 0.6, "2": 0.25}'.
+# Calibrated for best.pt v28 (run maggot_yolov8n_v28) from 12D-KOREKSI in
+# capstone6_v28.ipynb: P/R computed AT each threshold on the validation set.
+# v28 recommendation was Adult 0.55 / Baby 0.20 / Prepupa 0.40 / Pupa 0.20.
+# Live defaults below are deliberately recall-first (small maggots on 720p
+# frames sit close to the detection limit): raise Adult first (0.40 -> 0.55)
+# if the dashboard shows too many false positives.
+# Override per class via YOLO_CLASS_CONF, e.g. '{"0": 0.55, "2": 0.40}'.
 def _class_thresholds() -> Dict[int, float]:
-    defaults = {0: 0.60, 1: 0.50, 2: 0.25, 3: 0.40}
+    defaults = {0: 0.40, 1: 0.25, 2: 0.30, 3: 0.25}
     try:
         values = json.loads(os.getenv("YOLO_CLASS_CONF", "{}"))
         for key, value in values.items():
@@ -53,14 +52,10 @@ def _class_thresholds() -> Dict[int, float]:
     return defaults
 
 CLASS_CONF = _class_thresholds()
-# Tiling (slice + per-tile predict) hanya menguntungkan untuk gambar ber-
-# resolusi tinggi (foto unggahan >= ~1920px): recall naik karena objek tetap
-# pada skala training. Untuk frame webcam C270 (1280x720), benchmark CPU
-# (bench_webcam_v2) menunjukkan tiled 960/960 2-3x lebih lambat (573-826 ms
-# vs 272-295 ms single) tanpa peningkatan deteksi yang berarti, dan pada
-# full-tray 720p tiled justru kehilangan seluruh deteksi karena objek mengecil
-# di bawah skala training. 1920 memastikan frame webcam lewat jalur single
-# yang cepat, sementara foto high-res tetap di-tile.
+# Jalur upload (/scan) memakai tiling hanya untuk gambar ber-resolusi tinggi
+# (foto >= ~1920px), karena frame webcam ditangani jalur live di predict_frame()
+# dengan grid 2x2 (lihat YOLO_LIVE_TILES). Pada upload, objek di foto besar
+# sudah cukup besar; pada frame 720p objek kecil, sehingga justru butuh tiling.
 TILED_MIN_LONG_SIDE = _env_int("TILED_MIN_LONG_SIDE", 1920)
 # 960 matches TRAIN_IMGSZ of best.pt, so each tile is fed at its native
 # training scale (no upscale/downscale distortion at tile edges).
@@ -181,3 +176,90 @@ def predict(model: YOLO, image: np.ndarray) -> tuple[List[Dict[str, Any]], str]:
         width, height, TILE_SIZE, TILE_OVERLAP, len(result),
     )
     return result, "tiled"
+
+
+# =====================================================================
+# Live-camera inference (WebRTC path)
+# =====================================================================
+# Frame webcam C270 (1280x720) berisi larva kecil (10-20 px). Bila frame
+# dikirim utuh ke imgsz 960, objek makin kecil dari skala training dan
+# terlewat. Jalur live karena itu memotong frame menjadi grid (default 2x2,
+# overlap 15%) dan menginferensi tiap tile pada imgsz training, lalu
+# menggabungkan hasilnya dengan NMS per kelas (fungsi yang sama dengan
+# jalur upload). Matikan lewat YOLO_LIVE_TILING=0 bila perangkat terlalu
+# lambat, naikkan YOLO_LIVE_TILES=3 hanya bila CPU sangat kuat.
+LIVE_TILING = os.getenv("YOLO_LIVE_TILING", "1").lower() in {"1", "true", "yes"}
+LIVE_TILES = max(1, min(6, _env_int("YOLO_LIVE_TILES", 2)))
+LIVE_TILE_OVERLAP = min(0.5, max(0.0, _env_float("YOLO_LIVE_TILE_OVERLAP", 0.15)))
+# Ambang mentah untuk live: sedikit di bawah ambang per kelas terendah supaya
+# penyaringan tetap dilakukan CLASS_CONF (per kelas), bukan satu ambang global.
+LIVE_RAW_CONF = _env_float(
+    "YOLO_LIVE_RAW_CONF",
+    max(0.01, min(CLASS_CONF.values()) - 0.05),
+)
+
+
+def _grid_slices(length: int, tiles: int, overlap: float) -> List[Tuple[int, int]]:
+    """Bagi sumbu `length` menjadi `tiles` potongan dengan overlap tertentu."""
+    if tiles <= 1 or length <= 0:
+        return [(0, length)]
+    overlap = min(0.5, max(0.0, overlap))
+    tile = int(round(length / (tiles - (tiles - 1) * overlap)))
+    tile = max(1, min(length, tile))
+    step = max(1, int(round(tile * (1 - overlap))))
+    starts: List[int] = []
+    for index in range(tiles):
+        start = min(index * step, length - tile)
+        if starts and start <= starts[-1]:
+            start = min(length - tile, starts[-1] + step)
+        starts.append(max(0, start))
+    if starts and starts[-1] + tile < length:
+        starts[-1] = length - tile
+    return [(start, min(length, start + tile)) for start in starts]
+
+
+def predict_frame(model: YOLO, frame: np.ndarray, tiled: bool | None = None) -> tuple[List[Dict[str, Any]], str]:
+    """Deteksi pada satu frame kamera.
+
+    Mengembalikan (detections, mode) dengan koordinat xyxy pada frame asli.
+    `detections` sudah difilter ambang per kelas (CLASS_CONF).
+    """
+    if frame is None or getattr(frame, "size", 0) == 0:
+        return [], "empty"
+
+    height, width = frame.shape[:2]
+    if tiled is None:
+        tiled = LIVE_TILING and LIVE_TILES > 1
+
+    if not tiled:
+        results = model.predict(
+            source=frame,
+            conf=LIVE_RAW_CONF,
+            iou=IOU,
+            imgsz=IMGSZ,
+            max_det=MAX_DET,
+            verbose=False,
+        )
+        return (
+            _result_boxes(results[0] if results else None, image_width=width, image_height=height),
+            "single",
+        )
+
+    detections: List[Dict[str, Any]] = []
+    for top, bottom in _grid_slices(height, LIVE_TILES, LIVE_TILE_OVERLAP):
+        for left, right in _grid_slices(width, LIVE_TILES, LIVE_TILE_OVERLAP):
+            tile = frame[top:bottom, left:right]
+            results = model.predict(
+                source=tile,
+                conf=LIVE_RAW_CONF,
+                iou=IOU,
+                imgsz=IMGSZ,
+                max_det=MAX_DET,
+                verbose=False,
+            )
+            detections.extend(
+                _result_boxes(results[0] if results else None, left, top, width, height)
+            )
+
+    return _class_nms(detections), "tiled"
+
