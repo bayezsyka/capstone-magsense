@@ -3,7 +3,6 @@ import {
   Camera,
   CameraOff,
   RefreshCw,
-  Play,
   Upload,
   Layers,
   Clock,
@@ -198,6 +197,7 @@ export default function Growth() {
         await videoRef.current.play();
       }
       setIsCameraActive(true);
+      setAutoScanEnabled(true);
     } catch (err) {
       console.error("Gagal membuka kamera:", err);
       setCameraError(
@@ -474,21 +474,6 @@ export default function Growth() {
             >
               <RefreshCw size={14} />
               <span>{facingMode === "environment" ? "Kamera Belakang" : "Kamera Depan"}</span>
-            </button>
-          )}
-
-          {/* Tombol Pindai Frame */}
-          {isCameraActive && (
-            <button
-              onClick={performScan}
-              disabled={isScanning}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all text-sm text-white shadow-sm ${isScanning
-                ? "bg-slate-400 cursor-not-allowed"
-                : "bg-[#97ad82] hover:bg-[#869b71]"
-                }`}
-            >
-              <Play size={16} />
-              {isScanning ? "Memindai..." : "Pindai Frame"}
             </button>
           )}
 
