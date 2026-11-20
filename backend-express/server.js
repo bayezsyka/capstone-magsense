@@ -16,9 +16,29 @@ const allowedOrigins = [
   'http://127.0.0.1:3000'
 ];
 
+function isOriginAllowed(origin) {
+  if (!origin) return true;
+  if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('sangkolo.my.id')) {
+    return true;
+  }
+  try {
+    const { hostname } = new URL(origin);
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname)
+    ) {
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('sangkolo.my.id')) {
+    if (isOriginAllowed(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -36,7 +56,7 @@ app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 const io = new Server(server, {
   cors: {
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('sangkolo.my.id')) {
+      if (isOriginAllowed(origin)) {
         callback(null, true);
       } else {
         callback(null, false);

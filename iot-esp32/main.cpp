@@ -1,234 +1,254 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <DHT.h>
-#include <ArduinoJson.h> // Library for JSON serialization/deserialization
+#include <ArduinoJson.h>
 
-// ======================= CONFIGURATION =======================
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
-const char* mqtt_server = "192.168.1.100"; // Ganti dengan IP Raspberry Pi / Broker MQTT
+// =====================================================================
+// CONFIGURATION (HOTSPOT & MQTT BROKER)
+// =====================================================================
+const char* ssid = "YOUR_HOTSPOT_SSID";
+const char* password = "YOUR_HOTSPOT_PASSWORD";
+const char* mqtt_server = "192.168.43.100"; // Replace with your Windows laptop hotspot IP (check via 'ipconfig')
 const int mqtt_port = 1883;
 
 // MQTT Topics
 const char* topic_sensor_data = "maggot/sensor/data";
 const char* topic_control_threshold = "maggot/kontrol/threshold";
 
-// ======================= PIN MAPPING =======================
-// DHT22 Sensors (4 Units)
-#define DHTPIN1 15
-#define DHTPIN2 2
-#define DHTPIN3 4
-#define DHTPIN4 16
+// =====================================================================
+// PIN MAPPING (HARDWARE SPECIFICATION)
+// =====================================================================
+#define DHT_INTERNAL_PIN 16
+#define DHT_EXTERNAL_PIN 17
 #define DHTTYPE DHT22
 
-DHT dht1(DHTPIN1, DHTTYPE);
-DHT dht2(DHTPIN2, DHTTYPE);
-DHT dht3(DHTPIN3, DHTTYPE);
-DHT dht4(DHTPIN4, DHTTYPE);
+DHT dhtInternal(DHT_INTERNAL_PIN, DHTTYPE);
+DHT dhtExternal(DHT_EXTERNAL_PIN, DHTTYPE);
 
-// Analog Soil Moisture (6 Units)
-const int soilPins[6] = {34, 35, 32, 33, 25, 26};
+#define PIN_SOIL 34 // ADC1 Input-Only
 
-// Output Relays
-#define PIN_HEATER 12     // Lampu Penghangat
-#define PIN_KIPAS 14      // Kipas IN/OUT
-#define PIN_VALVE 27      // Solenoid Valve
+#define PIN_RELAY_INTAKE  18
+#define PIN_RELAY_EXHAUST 19
+#define PIN_RELAY_PTC     23
 
-// ======================= GLOBAL VARIABLES =======================
+// Active LOW Relays
+const int RELAY_ON  = LOW;
+const int RELAY_OFF = HIGH;
+
+// Safety Lock: Keep PTC heater OFF during initial integration testing
+const bool SAFETY_LOCK_PTC_OFF = true;
+
+// =====================================================================
+// TIMING & NON-BLOCKING STATES
+// =====================================================================
 WiFiClient espClient;
 PubSubClient client(espClient);
 
 unsigned long lastMsg = 0;
-const long interval = 10000; // 10 seconds non-blocking interval
+const long interval = 5000;
 
-// Thresholds (Default values)
-float temp_min = 25.0;
-float temp_max = 32.0;
+unsigned long lastWifiRetry = 0;
+const unsigned long wifiRetryInterval = 10000;
+
+unsigned long lastMqttRetry = 0;
+const unsigned long mqttRetryInterval = 5000;
+
+// Thresholds
+float temp_min = 28.0;
+float temp_max = 34.0;
 float moisture_min = 40.0;
-float moisture_max = 65.0;
 
-// Current aggregate readings
-float currentTemp = 0.0;
-float currentMoisture = 0.0;
+bool isIntakeActive = false;
+bool isExhaustActive = false;
+bool isPtcActive = false;
 
-// ======================= SETUP WIFI =======================
+// =====================================================================
+// NON-BLOCKING CONNECTION HANDLER
+// =====================================================================
 void setup_wifi() {
-  delay(10);
-  Serial.println();
-  Serial.print("Connecting to ");
+  Serial.print("[WIFI] Connecting to ");
   Serial.println(ssid);
-
+  WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
 }
 
-// ======================= MQTT CALLBACK =======================
+void maintainConnections() {
+  unsigned long now = millis();
+
+  // 1. Maintain WiFi
+  if (WiFi.status() != WL_CONNECTED) {
+    if (now - lastWifiRetry >= wifiRetryInterval) {
+      lastWifiRetry = now;
+      Serial.println("[WIFI] Connection lost. Reconnecting to hotspot...");
+      WiFi.disconnect();
+      WiFi.reconnect();
+    }
+    return;
+  }
+
+  // 2. Maintain MQTT
+  if (!client.connected()) {
+    if (now - lastMqttRetry >= mqttRetryInterval) {
+      lastMqttRetry = now;
+      Serial.print("[MQTT] Connecting to ");
+      Serial.print(mqtt_server);
+      Serial.print("...");
+      String clientId = "ESP32-MagSense-";
+      clientId += String((uint32_t)ESP.getEfuseMac(), HEX);
+
+      if (client.connect(clientId.c_str())) {
+        Serial.println(" CONNECTED!");
+        client.subscribe(topic_control_threshold);
+      } else {
+        Serial.print(" FAILED, rc=");
+        Serial.println(client.state());
+      }
+    }
+  }
+}
+
+// =====================================================================
+// MQTT CALLBACK
+// =====================================================================
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  
   String messageTemp;
-  for (int i = 0; i < length; i++) {
+  for (unsigned int i = 0; i < length; i++) {
     messageTemp += (char)payload[i];
   }
+  Serial.print("[MQTT RX] ");
+  Serial.print(topic);
+  Serial.print(": ");
   Serial.println(messageTemp);
 
-  // Handle Threshold updates
   if (String(topic) == topic_control_threshold) {
-    StaticJsonDocument<200> doc;
+    StaticJsonDocument<256> doc;
     DeserializationError error = deserializeJson(doc, messageTemp);
-
-    if (error) {
-      Serial.print(F("deserializeJson() failed: "));
-      Serial.println(error.f_str());
-      return;
+    if (!error) {
+      if (doc.containsKey("temp_min")) temp_min = doc["temp_min"];
+      if (doc.containsKey("temp_max")) temp_max = doc["temp_max"];
+      if (doc.containsKey("soil_min")) moisture_min = doc["soil_min"];
+      Serial.println("[THRESHOLD] Updated successfully.");
     }
-
-    if(doc.containsKey("tempMin")) temp_min = doc["tempMin"];
-    if(doc.containsKey("tempMax")) temp_max = doc["tempMax"];
-    if(doc.containsKey("mediaMin")) moisture_min = doc["mediaMin"];
-    if(doc.containsKey("mediaMax")) moisture_max = doc["mediaMax"];
-    
-    Serial.println("Thresholds updated via MQTT");
   }
 }
 
-// ======================= MQTT RECONNECT =======================
-void reconnect() {
-  while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    String clientId = "ESP32Client-";
-    clientId += String(random(0xffff), HEX);
-    
-    if (client.connect(clientId.c_str())) {
-      Serial.println("connected");
-      client.subscribe(topic_control_threshold);
+// =====================================================================
+// ACTUATOR AUTOMATION
+// =====================================================================
+void checkAutomation(float avgTemp, float avgMoisture) {
+  // Intake & Exhaust
+  if (avgTemp > temp_max) {
+    digitalWrite(PIN_RELAY_INTAKE, RELAY_ON);
+    digitalWrite(PIN_RELAY_EXHAUST, RELAY_ON);
+    isIntakeActive = true;
+    isExhaustActive = true;
+  } else {
+    digitalWrite(PIN_RELAY_INTAKE, RELAY_OFF);
+    digitalWrite(PIN_RELAY_EXHAUST, RELAY_OFF);
+    isIntakeActive = false;
+    isExhaustActive = false;
+  }
+
+  // PTC Heater (Forced OFF in safety lock mode)
+  if (SAFETY_LOCK_PTC_OFF) {
+    digitalWrite(PIN_RELAY_PTC, RELAY_OFF);
+    isPtcActive = false;
+  } else {
+    if (avgTemp < temp_min) {
+      digitalWrite(PIN_RELAY_PTC, RELAY_ON);
+      isPtcActive = true;
     } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      delay(5000);
+      digitalWrite(PIN_RELAY_PTC, RELAY_OFF);
+      isPtcActive = false;
     }
   }
 }
 
-// ======================= LOCAL AUTOMATION =======================
-void checkAutomation() {
-  // Heater Logic
-  if (currentTemp < temp_min) {
-    digitalWrite(PIN_HEATER, HIGH); // Assuming HIGH triggers relay
-    Serial.println("Automation: Temp low. Heater ON.");
-  } else if (currentTemp >= temp_min + 1.0) { // Hysteresis
-    digitalWrite(PIN_HEATER, LOW);
-  }
-
-  // Kipas Logic
-  if (currentTemp > temp_max) {
-    digitalWrite(PIN_KIPAS, HIGH);
-    Serial.println("Automation: Temp high. Kipas ON.");
-  } else if (currentTemp <= temp_max - 1.0) {
-    digitalWrite(PIN_KIPAS, LOW);
-  }
-
-  // Solenoid Valve Logic
-  if (currentMoisture < moisture_min) {
-    digitalWrite(PIN_VALVE, HIGH);
-    Serial.println("Automation: Moisture low. Valve OPEN.");
-  } else if (currentMoisture > moisture_max) {
-    digitalWrite(PIN_VALVE, LOW);
-    Serial.println("Automation: Moisture high. Valve CLOSED.");
-  }
-}
-
-// ======================= MAIN SETUP =======================
+// =====================================================================
+// SETUP & LOOP
+// =====================================================================
 void setup() {
   Serial.begin(115200);
 
-  // Initialize Relays
-  pinMode(PIN_HEATER, OUTPUT);
-  pinMode(PIN_KIPAS, OUTPUT);
-  pinMode(PIN_VALVE, OUTPUT);
-  digitalWrite(PIN_HEATER, LOW);
-  digitalWrite(PIN_KIPAS, LOW);
-  digitalWrite(PIN_VALVE, LOW);
+  // Initialize Relays (Pre-write HIGH so Active LOW relays stay OFF during boot)
+  digitalWrite(PIN_RELAY_INTAKE, RELAY_OFF);
+  digitalWrite(PIN_RELAY_EXHAUST, RELAY_OFF);
+  digitalWrite(PIN_RELAY_PTC, RELAY_OFF);
 
-  // Initialize DHT
-  dht1.begin();
-  dht2.begin();
-  dht3.begin();
-  dht4.begin();
+  pinMode(PIN_RELAY_INTAKE, OUTPUT);
+  pinMode(PIN_RELAY_EXHAUST, OUTPUT);
+  pinMode(PIN_RELAY_PTC, OUTPUT);
+
+  digitalWrite(PIN_RELAY_INTAKE, RELAY_OFF);
+  digitalWrite(PIN_RELAY_EXHAUST, RELAY_OFF);
+  digitalWrite(PIN_RELAY_PTC, RELAY_OFF);
+
+  // Initialize DHT22
+  dhtInternal.begin();
+  dhtExternal.begin();
+
+  // Initialize Soil
+  pinMode(PIN_SOIL, INPUT);
 
   setup_wifi();
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
+  client.setBufferSize(512);
 }
 
-// ======================= MAIN LOOP =======================
 void loop() {
-  if (!client.connected()) {
-    reconnect();
+  maintainConnections();
+
+  if (client.connected()) {
+    client.loop();
   }
-  client.loop();
 
   unsigned long now = millis();
   if (now - lastMsg > interval) {
     lastMsg = now;
 
-    // Read DHT Sensors (Average logic for simplicity)
-    float t1 = dht1.readTemperature();
-    float h1 = dht1.readHumidity();
-    
-    // Fallback if NaN
-    if (isnan(t1)) t1 = 28.0; 
-    if (isnan(h1)) h1 = 70.0;
-    
-    currentTemp = t1; // Simplified: using sensor 1 as primary for this example
-    float currentHumAir = h1;
+    float t1 = dhtInternal.readTemperature();
+    float h1 = dhtInternal.readHumidity();
+    float t2 = dhtExternal.readTemperature();
+    float h2 = dhtExternal.readHumidity();
 
-    // Read Soil Moisture (Average of 6 sensors)
-    long totalMoisture = 0;
-    for(int i=0; i<6; i++) {
-      int raw = analogRead(soilPins[i]);
-      // Convert analog value to percentage (Calibration needed in real life)
-      int pct = map(raw, 4095, 1000, 0, 100); 
-      pct = constrain(pct, 0, 100);
-      totalMoisture += pct;
+    float sumT = 0, sumH = 0;
+    int count = 0;
+    if (!isnan(t1) && !isnan(h1)) { sumT += t1; sumH += h1; count++; }
+    if (!isnan(t2) && !isnan(h2)) { sumT += t2; sumH += h2; count++; }
+
+    float avgTemp = count > 0 ? (sumT / count) : 29.0;
+    float avgHum  = count > 0 ? (sumH / count) : 70.0;
+
+    int rawSoil = analogRead(PIN_SOIL);
+    float soilPct = map(rawSoil, 4095, 1500, 0, 100);
+    soilPct = constrain(soilPct, 0.0, 100.0);
+
+    checkAutomation(avgTemp, soilPct);
+
+    if (client.connected()) {
+      StaticJsonDocument<384> doc;
+      doc["box_id"] = 1;
+      doc["box_code"] = "MAG-01";
+      doc["device_id"] = "ESP32-MAG-01";
+      doc["temperature"] = round(avgTemp * 10.0) / 10.0;
+      doc["humidity"] = round(avgHum * 10.0) / 10.0;
+      doc["media_humidity"] = round(soilPct * 10.0) / 10.0;
+      doc["raw_soil_adc"] = rawSoil;
+      doc["source"] = "real";
+
+      JsonObject actuators = doc.createNestedObject("actuators");
+      actuators["intake"]  = isIntakeActive ? "ON" : "OFF";
+      actuators["exhaust"] = isExhaustActive ? "ON" : "OFF";
+      actuators["ptc"]     = isPtcActive ? "ON" : "OFF";
+      actuators["heater"]  = isPtcActive ? "ON" : "OFF";
+      actuators["kipas"]   = (isIntakeActive || isExhaustActive) ? "ON" : "OFF";
+
+      char jsonBuffer[384];
+      serializeJson(doc, jsonBuffer);
+      client.publish(topic_sensor_data, jsonBuffer);
+      Serial.print("[PUBLISHED] ");
+      Serial.println(jsonBuffer);
     }
-    currentMoisture = totalMoisture / 6.0;
-
-    // Local Automation
-    checkAutomation();
-
-    // Create JSON Payload
-    StaticJsonDocument<256> doc;
-    doc["box_id"] = 1; // ID Box ESP32 ini
-    doc["temperature"] = currentTemp;
-    doc["humidity"] = currentHumAir;
-    doc["media_humidity"] = currentMoisture;
-    doc["source"] = "real";
-    
-    // Status aktuator
-    JsonObject actuators = doc.createNestedObject("actuators");
-    actuators["heater"] = digitalRead(PIN_HEATER) == HIGH ? "ON" : "OFF";
-    actuators["kipas"] = digitalRead(PIN_KIPAS) == HIGH ? "ON" : "OFF";
-    actuators["valve"] = digitalRead(PIN_VALVE) == HIGH ? "ON" : "OFF";
-
-    char jsonBuffer[256];
-    serializeJson(doc, jsonBuffer);
-
-    // Publish to MQTT
-    client.publish(topic_sensor_data, jsonBuffer);
-    Serial.print("Published data: ");
-    Serial.println(jsonBuffer);
   }
 }

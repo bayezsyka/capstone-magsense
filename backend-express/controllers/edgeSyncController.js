@@ -3,7 +3,13 @@ const pool = require('../db');
 const BOX_UUID_MAP = {
     1: '00000000-0000-0000-0000-000000000001',
     2: '00000000-0000-0000-0000-000000000002',
-    3: '00000000-0000-0000-0000-000000000003'
+    3: '00000000-0000-0000-0000-000000000003',
+    'MAG-01': '00000000-0000-0000-0000-000000000001',
+    'MAG-02': '00000000-0000-0000-0000-000000000002',
+    'MAG-03': '00000000-0000-0000-0000-000000000003',
+    'BOX-1': '00000000-0000-0000-0000-000000000001',
+    'BOX-2': '00000000-0000-0000-0000-000000000002',
+    'BOX-3': '00000000-0000-0000-0000-000000000003'
 };
 
 function resolveBoxId(input) {
@@ -11,13 +17,27 @@ function resolveBoxId(input) {
     if (typeof input === 'number' && BOX_UUID_MAP[input]) {
         return BOX_UUID_MAP[input];
     }
-    const str = String(input);
+    const str = String(input).trim();
+    if (BOX_UUID_MAP[str]) {
+        return BOX_UUID_MAP[str];
+    }
+    const upper = str.toUpperCase();
+    if (BOX_UUID_MAP[upper]) {
+        return BOX_UUID_MAP[upper];
+    }
     if (/^[0-9a-fA-F-]{36}$/.test(str)) {
         return str;
     }
     const num = parseInt(str, 10);
     if (!isNaN(num) && BOX_UUID_MAP[num]) {
         return BOX_UUID_MAP[num];
+    }
+    const match = str.match(/\d+/);
+    if (match) {
+        const parsedNum = parseInt(match[0], 10);
+        if (BOX_UUID_MAP[parsedNum]) {
+            return BOX_UUID_MAP[parsedNum];
+        }
     }
     return BOX_UUID_MAP[1];
 }
@@ -127,6 +147,9 @@ exports.syncData = async (req, res) => {
         if (io) {
             if (summary.sensor_data > 0) {
                 io.emit('new_sensor_data', sensor_data);
+            }
+            if (summary.actuator_logs > 0) {
+                io.emit('new_actuator_logs', actuator_logs);
             }
             if (summary.cv_results > 0) {
                 io.emit('new_cv_results', cv_results);

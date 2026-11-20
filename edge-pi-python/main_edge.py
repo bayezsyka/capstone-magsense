@@ -3,6 +3,7 @@ import time
 import sys
 import threading
 import logging
+import os
 from local_db import init_db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [EDGE SUPERVISOR] - %(message)s")
@@ -14,6 +15,13 @@ WORKERS = [
     "local_api.py",
     "cloud_sync.py"
 ]
+
+if os.getenv("EDGE_WORKERS"):
+    WORKERS = [
+        worker.strip()
+        for worker in os.environ["EDGE_WORKERS"].split(",")
+        if worker.strip()
+    ]
 
 processes = {}
 

@@ -14,6 +14,8 @@ services:
       context: ./edge-pi-python
       dockerfile: Dockerfile
     container_name: capstone-edge-mock-iot
+    profiles:
+      - simulator
     restart: unless-stopped
     command: python mock_iot_publisher.py
     volumes:
@@ -56,6 +58,7 @@ services:
     build:
       context: ./edge-pi-python
       dockerfile: Dockerfile
+      target: iot
     container_name: capstone-edge-service
     restart: unless-stopped
     command: python main_edge.py

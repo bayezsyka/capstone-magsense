@@ -113,6 +113,8 @@ export default function Growth() {
   const [selectedBoxId, setSelectedBoxId] = useState("");
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [facingMode, setFacingMode] = useState("environment"); // "environment" (belakang) atau "user" (depan)
+  const [videoDevices, setVideoDevices] = useState([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [autoScanEnabled, setAutoScanEnabled] = useState(false);
   const [scanMessage, setScanMessage] = useState(null);
@@ -174,23 +176,69 @@ export default function Growth() {
     initData();
   }, []);
 
-  // Nyalakan Kamera Device
-  const startCamera = async () => {
+  // Perbarui daftar input video (USB webcam / kamera laptop)
+  const updateCameraDevices = useCallback(async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoInputs = devices.filter((d) => d.kind === "videoinput");
+      setVideoDevices(videoInputs);
+      setSelectedDeviceId((curr) => {
+        if (curr && videoInputs.some((d) => d.deviceId === curr)) return curr;
+        const usbCam = videoInputs.find((d) =>
+          /usb|external|c270|webcam/i.test(d.label)
+        );
+        return usbCam ? usbCam.deviceId : (videoInputs[0]?.deviceId || "");
+      });
+    } catch (err) {
+      console.warn("Gagal membaca daftar perangkat kamera:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    updateCameraDevices();
+    if (navigator.mediaDevices?.addEventListener) {
+      navigator.mediaDevices.addEventListener("devicechange", updateCameraDevices);
+      return () => {
+        navigator.mediaDevices.removeEventListener("devicechange", updateCameraDevices);
+      };
+    }
+  }, [updateCameraDevices]);
+
+  // Nyalakan Kamera Device (mendukung USB Webcam & Built-in Camera)
+  const startCamera = async (deviceIdToUse) => {
     setCameraError(null);
     setScanMessage(null);
+    const targetDeviceId = deviceIdToUse || selectedDeviceId;
     try {
       if (videoRef.current && videoRef.current.srcObject) {
         videoRef.current.srcObject.getTracks().forEach((t) => t.stop());
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: facingMode,
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        audio: false
-      });
+      let videoConstraints = {
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      };
+
+      if (targetDeviceId) {
+        videoConstraints.deviceId = { exact: targetDeviceId };
+      } else {
+        videoConstraints.facingMode = facingMode;
+      }
+
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraints,
+          audio: false
+        });
+      } catch (constraintErr) {
+        console.warn("Constraint camera deviceId gagal, fallback ke generic video:", constraintErr);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
+      }
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -198,6 +246,7 @@ export default function Growth() {
       }
       setIsCameraActive(true);
       setAutoScanEnabled(true);
+      updateCameraDevices();
     } catch (err) {
       console.error("Gagal membuka kamera:", err);
       setCameraError(
@@ -465,6 +514,28 @@ export default function Growth() {
             {isCameraActive ? "Tutup Kamera" : "Buka Kamera Device"}
           </button>
 
+          {/* Pilih Sumber Kamera (USB Webcam / Internal) */}
+          {videoDevices.length > 0 && (
+            <select
+              className="px-3 py-2.5 bg-white border border-slate-200 rounded-xl outline-none font-bold text-slate-700 shadow-sm text-xs cursor-pointer hover:border-slate-300 focus:ring-2 focus:ring-[#0c253b]"
+              value={selectedDeviceId}
+              onChange={(e) => {
+                const newDevId = e.target.value;
+                setSelectedDeviceId(newDevId);
+                if (isCameraActive) {
+                  startCamera(newDevId);
+                }
+              }}
+              title="Pilih Kamera (USB Webcam / Kamera Internal)"
+            >
+              {videoDevices.map((d, idx) => (
+                <option key={d.deviceId || idx} value={d.deviceId}>
+                  {d.label || `Kamera ${idx + 1}`}
+                </option>
+              ))}
+            </select>
+          )}
+
           {/* Beralih Kamera Depan/Belakang jika aktif */}
           {isCameraActive && (
             <button
@@ -512,7 +583,7 @@ export default function Growth() {
         {/* Server & Environment Indicator */}
         <div className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-slate-100 px-3.5 py-2 rounded-xl border border-slate-200">
           <Cpu size={14} className="text-[#0c253b]" />
-          <span>Inferensi: Proxmox CT 600 (YOLOv8 + XGBoost)</span>
+          <span>Inferensi: YOLOv8 + XGBoost</span>
         </div>
       </div>
 

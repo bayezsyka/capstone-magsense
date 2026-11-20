@@ -25,7 +25,9 @@ const Dashboard = () => {
 
   const airTemp = primaryCard?.temp ?? '--';
   const airHumidity = primaryCard?.humidity ?? '--';
-  const mediaHumidity = primaryCard?.mediaHumidity ?? '--';
+  const hasMediaHumidity = primaryCard?.mediaHumidity !== null && primaryCard?.mediaHumidity !== undefined && primaryCard?.mediaHumidity !== '--';
+  const mediaValue = hasMediaHumidity ? primaryCard.mediaHumidity : (primaryCard?.rawSoilAdc ?? '--');
+  const mediaUnit = hasMediaHumidity ? '%' : (primaryCard?.rawSoilAdc ? ' ADC' : '');
   const currentNumber = primaryCard?.number ?? '--';
   const phase = primaryCard?.dominantPhase
     || summary?.cvAnalysis?.dominantPhase
@@ -129,7 +131,7 @@ const Dashboard = () => {
             </div>
             <div className="bg-gradient-to-br from-amber-50 to-orange-50/50 border border-orange-100/50 rounded-2xl p-6 text-center transition-all duration-300 hover:shadow-md">
               <p className="text-xs font-black text-amber-500 uppercase tracking-wider mb-2">Hum. Media</p>
-              <p className="text-4xl font-bold text-slate-800">{mediaHumidity}<span className="text-xl text-slate-400 font-medium">%</span></p>
+              <p className="text-4xl font-bold text-slate-800">{mediaValue}<span className="text-xl text-slate-400 font-medium">{mediaUnit}</span></p>
             </div>
           </div>
 

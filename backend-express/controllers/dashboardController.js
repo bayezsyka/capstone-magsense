@@ -73,9 +73,9 @@ exports.getDashboardSummary = async (req, res) => {
         };
         actRes.rows.forEach(r => {
             const type = (r.type || '').toLowerCase();
-            if (type.includes('heater') || type.includes('pemanas')) actuators.heater = r.status || 'OFF';
-            if (type.includes('fan') || type.includes('kipas')) actuators.kipas = r.status || 'OFF';
-            if (type.includes('pump') || type.includes('pompa') || type.includes('solenoid')) actuators.pompa = r.status || 'OFF';
+            if (type.includes('heater') || type.includes('pemanas') || type.includes('ptc')) actuators.heater = r.status || 'OFF';
+            if (type.includes('fan') || type.includes('kipas') || type.includes('intake') || type.includes('exhaust')) actuators.kipas = r.status || 'OFF';
+            if (type.includes('pump') || type.includes('pompa') || type.includes('solenoid') || type.includes('valve')) actuators.pompa = r.status || 'OFF';
         });
 
         // 3. Latest prediction for the primary box
@@ -106,12 +106,12 @@ exports.getDashboardSummary = async (req, res) => {
             boxes,
             currentBox: {
                 id: primaryBox && primaryBox.box_number ? primaryBox.box_number : 1,
-                airTemp: formatSensorValue(latestSensor.air_temp, '30.5'),
-                airHumidity: formatSensorValue(latestSensor.air_humidity, '70.0'),
-                mediaHumidity: formatSensorValue(latestSensor.media_humidity, '55.0'),
-                rawSoilAdc: latestSensor.raw_soil_adc || 2400,
+                airTemp: formatSensorValue(latestSensor.air_temp, '--'),
+                airHumidity: formatSensorValue(latestSensor.air_humidity, '--'),
+                mediaHumidity: formatSensorValue(latestSensor.media_humidity, null),
+                rawSoilAdc: latestSensor.raw_soil_adc !== undefined && latestSensor.raw_soil_adc !== null ? latestSensor.raw_soil_adc : null,
                 actuators,
-                source: latestSensor.source || 'mock'
+                source: latestSensor.source || 'real'
             },
             harvestPrediction: {
                 estimatedDays: latestPred.estimated_days ? parseFloat(latestPred.estimated_days).toFixed(1) : '12.0',

@@ -6,13 +6,25 @@ const getSocketUrl = () => {
   if (import.meta.env.DEV) return undefined;
   const wsEnv = import.meta.env.VITE_WS_URL;
   if (wsEnv && wsEnv.startsWith("http")) {
+    if (typeof window !== "undefined" && window.location.hostname && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+      try {
+        const parsed = new URL(wsEnv);
+        if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+          parsed.hostname = window.location.hostname;
+          return parsed.toString().replace(/\/+$/, "");
+        }
+      } catch (_) {}
+    }
     return wsEnv;
   }
   const apiEnv = import.meta.env.VITE_API_URL;
   if (apiEnv && apiEnv.startsWith("http")) {
     return apiEnv.replace(/\/api\/?$/, "");
   }
-  return "https://api-capstone.sangkolo.my.id";
+  if (typeof window !== "undefined" && window.location.hostname) {
+    return `http://${window.location.hostname}:5005`;
+  }
+  return "http://localhost:5005";
 };
 
 const SOCKET_URL = getSocketUrl();

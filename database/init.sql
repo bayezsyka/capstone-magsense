@@ -120,7 +120,6 @@ ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS notification_type char
 ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS target_role character varying(50) DEFAULT 'all';
 ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS severity character varying(20) DEFAULT 'info';
 ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS box_id uuid REFERENCES public.boxes(id) ON DELETE CASCADE;
-);
 
 -- SEED INITIAL DEFAULT DATA
 -- Default Tenant

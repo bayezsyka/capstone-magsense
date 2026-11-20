@@ -216,7 +216,7 @@ exports.scanFrame = async (req, res) => {
             }
         }
 
-        const cvServiceUrl = process.env.CV_SERVICE_URL || 'http://172.18.0.1:5001/scan';
+        const cvServiceUrl = process.env.CV_SERVICE_URL || 'http://cv-inference:5001/scan';
         const response = await fetch(cvServiceUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

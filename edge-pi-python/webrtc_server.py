@@ -4,6 +4,7 @@ import logging
 import os
 import threading
 import time
+import sys
 
 import cv2
 import numpy as np
@@ -105,8 +106,17 @@ class CameraVideoStreamTrack(VideoStreamTrack):
         except ValueError:
             self.src_id = src
 
-        logging.info(f"Initializing camera source {self.src_id} via AVFoundation...")
-        self.cap = cv2.VideoCapture(self.src_id, cv2.CAP_AVFOUNDATION)
+        backend = cv2.CAP_ANY
+        if sys.platform == "darwin":
+            backend = cv2.CAP_AVFOUNDATION
+        elif sys.platform == "win32":
+            backend = cv2.CAP_DSHOW
+        elif sys.platform.startswith("linux"):
+            backend = cv2.CAP_V4L2
+        self.backend = backend
+
+        logging.info(f"Initializing camera source {self.src_id} via backend {self.backend}...")
+        self.cap = cv2.VideoCapture(self.src_id, self.backend)
         if not self.cap.isOpened():
             self.cap = cv2.VideoCapture(self.src_id)
 
@@ -160,11 +170,11 @@ class CameraVideoStreamTrack(VideoStreamTrack):
 
         if frame is None:
             if not self.cap.isOpened():
-                self.cap.open(self.src_id, cv2.CAP_AVFOUNDATION)
+                self.cap.open(self.src_id, getattr(self, "backend", cv2.CAP_ANY))
 
             frame = np.zeros((480, 640, 3), dtype=np.uint8)
-            cv2.putText(frame, "MACOS CAMERA PERMISSION REQUIRED", (30, 220), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 50, 255), 2, cv2.LINE_AA)
-            cv2.putText(frame, "System Settings -> Privacy & Security -> Camera", (35, 260), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1, cv2.LINE_AA)
+            cv2.putText(frame, "CAMERA ACCESS REQUIRED", (30, 220), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 50, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame, "Pastikan izin akses kamera aktif dan device tidak digunakan aplikasi lain", (35, 260), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1, cv2.LINE_AA)
             cv2.putText(frame, "Izinkan Terminal / Python mengakses Kamera Mac", (45, 290), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (16, 185, 129), 1, cv2.LINE_AA)
 
         self.frame_count += 1
@@ -365,7 +375,7 @@ def create_app():
 if __name__ == "__main__":
     init_db()
     app = create_app()
-    HOST = "127.0.0.1"
-    PORT = 8081
-    logging.info(f"Starting Native WebRTC Server locked to {HOST}:{PORT}")
+    HOST = os.environ.get("WEBRTC_HOST", "0.0.0.0")
+    PORT = int(os.environ.get("WEBRTC_PORT", 8081))
+    logging.info(f"Starting Native WebRTC Server on {HOST}:{PORT}")
     web.run_app(app, host=HOST, port=PORT)
